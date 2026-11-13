@@ -2,6 +2,7 @@ package cz.zcu.kiv.caretracker.controller;
 
 import cz.zcu.kiv.caretracker.dto.MessageResponseDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientDTO;
+import cz.zcu.kiv.caretracker.dto.client.ClientDocumentDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientRequestDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientShortDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientTerminateDTO;
@@ -12,19 +13,24 @@ import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanDTO;
 import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanVersionSummaryDTO;
 import cz.zcu.kiv.caretracker.dto.picture.PictureDTO;
 import cz.zcu.kiv.caretracker.entity.Client;
+import cz.zcu.kiv.caretracker.entity.ClientDocument;
 import cz.zcu.kiv.caretracker.entity.Picture;
 import cz.zcu.kiv.caretracker.mapper.ClientMapper;
+import cz.zcu.kiv.caretracker.service.ClientDocumentService;
 import cz.zcu.kiv.caretracker.service.ClientService;
 import cz.zcu.kiv.caretracker.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -42,6 +48,8 @@ public class ClientController {
     private ClientService clientService;
     @Autowired
     private UserService userService;
+    @Autowired
+    private ClientDocumentService clientDocumentService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR', 'CAREGIVER')")
@@ -218,6 +226,42 @@ public class ClientController {
     public ResponseEntity<Void> deletePicture(@PathVariable Long id) {
         log.info("Deleting picture for client: {}", id);
         clientService.deletePicture(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ========== Document endpoints ==========
+
+    @GetMapping("/{id}/documents")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR')")
+    public ResponseEntity<List<ClientDocumentDTO>> getDocuments(@PathVariable Long id) {
+        return ResponseEntity.ok(clientDocumentService.getDocuments(id));
+    }
+
+    @PostMapping("/{id}/documents")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR')")
+    public ResponseEntity<ClientDocumentDTO> uploadDocument(@PathVariable Long id,
+                                                            @RequestParam(value = "type", required = false) String type,
+                                                            @RequestParam("file") MultipartFile file) throws IOException {
+        log.info("Uploading document for client: {}", id);
+        return ResponseEntity.ok(clientDocumentService.uploadDocument(id, type, file));
+    }
+
+    @GetMapping("/{id}/documents/{documentId}")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR')")
+    public ResponseEntity<byte[]> downloadDocument(@PathVariable Long id, @PathVariable Long documentId) {
+        ClientDocument document = clientDocumentService.getDocument(id, documentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(document.getContentType()))
+                .header("Content-Disposition",
+                        ContentDisposition.attachment().filename(document.getFileName(), StandardCharsets.UTF_8).build().toString())
+                .body(document.getData());
+    }
+
+    @DeleteMapping("/{id}/documents/{documentId}")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR')")
+    public ResponseEntity<Void> deleteDocument(@PathVariable Long id, @PathVariable Long documentId) {
+        log.info("Deleting document {} of client: {}", documentId, id);
+        clientDocumentService.deleteDocument(id, documentId);
         return ResponseEntity.noContent().build();
     }
 }

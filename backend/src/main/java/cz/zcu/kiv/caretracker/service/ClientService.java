@@ -395,14 +395,6 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         return clientRepository.save(client);
     }
 
-    /**
-     * Validates that the current user may modify a client's individual plan.
-     * SUPERADMIN and ADMIN (same organization) have full access;
-     * COORDINATOR and CAREGIVER may only edit plans for clients directly assigned to them.
-     *
-     * @param client the client whose plan is being modified
-     * @throws SecurityException if the user does not have write access to this plan
-     */
     /** Same required fields as the client form; a missing one would otherwise fail deep in the mapper with a 500. */
     private static void validateRequiredFields(ClientRequestDTO dto) {
         requireText(dto.getFirstName(), "Prosím zadejte jméno");
@@ -437,6 +429,14 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         }
     }
 
+    /**
+     * Validates that the current user may modify a client's individual plan.
+     * SUPERADMIN and ADMIN (same organization) have full access, COORDINATOR may edit plans of all clients
+     * of their department, CAREGIVER only plans of clients assigned to them.
+     *
+     * @param client the client whose plan is being modified
+     * @throws SecurityException if the user does not have write access to this plan
+     */
     private void validateIndividualPlanUpdateAccess(Client client) {
         User user = getCurrentUser();
         UserRole role = user.getRole();
@@ -460,12 +460,19 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             return;
         }
 
-        // CAREGIVER and COORDINATOR may only edit plans for their directly assigned clients
-        if (role == UserRole.CAREGIVER || role == UserRole.COORDINATOR) {
+        if (role == UserRole.COORDINATOR) {
+            Department employeeDepartment = user.getEmployee().getDepartment();
+            if (employeeDepartment == null || !employeeDepartment.getId().equals(client.getDepartment().getId())) {
+                throw new SecurityException("Koordinátor smí upravovat individuální plán pouze klientům svého střediska");
+            }
+            return;
+        }
+
+        if (role == UserRole.CAREGIVER) {
             Long assignedCaregiverId = client.getCaregiver().getId();
             Long currentEmployeeId = user.getEmployee().getId();
             if (!assignedCaregiverId.equals(currentEmployeeId)) {
-                throw new SecurityException("Zaměstnanec smí upravovat individuální plán pouze svým klientům");
+                throw new SecurityException("Pečovatel smí upravovat individuální plán pouze svým klientům");
             }
             return;
         }

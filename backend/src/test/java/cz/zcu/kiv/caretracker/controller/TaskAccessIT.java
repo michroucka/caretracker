@@ -1,6 +1,7 @@
 package cz.zcu.kiv.caretracker.controller;
 
 import cz.zcu.kiv.caretracker.entity.Task;
+import cz.zcu.kiv.caretracker.repository.StatutoryTaskRepository;
 import cz.zcu.kiv.caretracker.repository.TaskRepository;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import cz.zcu.kiv.caretracker.support.AccessScenario;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,9 +40,14 @@ class TaskAccessIT extends AbstractIntegrationTest {
     private static final Set<Actor> CATALOG_MANAGERS = EnumSet.of(SUPERADMIN, ADMIN);
     // creating always targets the admin's own organization, so an admin of another organization may create too
     private static final Set<Actor> CATALOG_CREATORS = EnumSet.of(SUPERADMIN, ADMIN, ADMIN_OTHER_ORG);
+    // the statutory catalog is the same for everyone, each employee sees which items their organization imported
+    private static final Set<Actor> EMPLOYEES = EnumSet.complementOf(EnumSet.of(CLIENT_ACCOUNT));
 
     @Autowired
     private TaskRepository taskRepository;
+
+    @Autowired
+    private StatutoryTaskRepository statutoryTaskRepository;
 
     private AccessScenario scenario;
     private Task task;
@@ -163,6 +170,24 @@ class TaskAccessIT extends AbstractIntegrationTest {
         assertThat(taskRepository.findById(task.getId())).get()
                 .extracting(Task::getActive)
                 .isEqualTo(false);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Actor.class)
+    void readStatutoryCatalog(Actor actor) throws Exception {
+        perform(actor, get("/api/statutory-tasks").param("organizationId", scenario.organization.getId().toString()))
+                .andExpect(allowedOnlyFor(EMPLOYEES, actor));
+    }
+
+    @ParameterizedTest
+    @EnumSource(Actor.class)
+    void importStatutoryTasks(Actor actor) throws Exception {
+        Long itemId = statutoryTaskRepository.findByCode("d6").orElseThrow().getId();
+
+        perform(actor, post("/api/tasks/import-statutory").param("organizationId", scenario.organization.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("statutoryTaskIds", List.of(itemId)))))
+                .andExpect(allowedOnlyFor(CATALOG_CREATORS, actor));
     }
 
     private ResultActions perform(Actor actor, MockHttpServletRequestBuilder request) throws Exception {

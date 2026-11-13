@@ -205,7 +205,7 @@
 - Import nastaví `Task.name = shortName`; `Task.name` zůstává volně upravitelný (alias organizace), oficiální název je vždy dostupný přes odkaz
 - `TaskDTO` navíc `statutoryTaskCode`, `statutoryTaskName` (oficiální název)
 - Tabulka `statutory_hourly_limit(monthly_hours_threshold int, max_unit_price_over_threshold int)` s jedním řádkem `80`, `145` (pro Task 12b)
-- Rozhodnuto: hodinové položky mají `maxUnitPrice = 165`; importuje se všech 31 hodinových položek zvlášť.
+- Rozhodnuto: hodinové položky mají `maxUnitPrice = 165`; importuje se všech 28 hodinových položek zvlášť (původně uvedených 31 byla chyba v počtu: 34 položek, z toho 4 za úkon a 2 za kg).
 - `GET /api/statutory-tasks?organizationId=` (všechny zaměstnanecké role) → `List<StatutoryTaskDTO>` s `importedTaskId` (id úkonu organizace, který na položku odkazuje, jinak `null`)
 - `POST /api/tasks/import-statutory?organizationId=` s tělem `{"statutoryTaskIds": [..]}` → `List<TaskDTO>` vytvořených; SUPERADMIN, ADMIN
 - `List<Task> TaskService.importStatutoryTasks(Long organizationId, List<Long> statutoryTaskIds)` vytvoří úkony jen pro vybrané položky, na které v organizaci ještě žádný úkon neodkazuje (už importované tiše přeskočí); cena = `maxUnitPrice`.

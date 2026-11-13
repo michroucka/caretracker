@@ -10,4 +10,5 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByActiveTrueAndOrganizationId(Long organizationId);
     List<Task> findByActiveFalseAndOrganizationId(Long organizationId);
     List<Task> findByOrganizationId(Long organizationId);
+    List<Task> findByOrganizationIdAndStatutoryTaskIsNotNull(Long organizationId);
 }

@@ -77,7 +77,7 @@ Doslovně ověřený je jen úvod „Maximální výše úhrady za poskytování
 ## Rozhodnuto (Michal)
 
 1. Hodinové položky mají `maxUnitPrice` = 165.
-2. Importuje se všech 31 hodinových úkonů jako samostatné položky.
+2. Importuje se všech 28 hodinových úkonů jako samostatné položky (dříve uvedených 31 byla chyba v počtu).
 3. Hranice 80 hodin a maximum 145 Kč nad hranicí půjdou do samostatné tabulky `statutory_hourly_limit`.
 4. c1 je rozdělené na celodenní stravu a oběd, protože mají jiné maximum.
 

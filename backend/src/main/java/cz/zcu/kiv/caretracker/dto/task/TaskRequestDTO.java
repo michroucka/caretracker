@@ -13,4 +13,5 @@ public class TaskRequestDTO {
     private String unitType;
     private Boolean doubleMeeting;
     private Long organizationId;
+    private Long statutoryTaskId;
 }

@@ -57,7 +57,7 @@
 
 **Files:** Modify `frontend/src/pages/IndividualPlan.jsx` (hlavička ř. 51-58, akce u „Nová verze“), styly do `frontend/src/index.css` (nebo kde jsou globální styly); Test `frontend/src/pages/IndividualPlan.test.jsx`
 
-- [ ] **Step 1:** test: hlavička obsahuje `DetailItem` „Telefon“ s `client.phone`; tlačítko „Tisk“ volá `window.print` (`vi.spyOn(window, "print").mockImplementation(() => {})`).
+- [ ] **Step 1:** test: tlačítko „Tisk“ volá `window.print` (`vi.spyOn(window, "print").mockImplementation(() => {})`). Telefon nanejvýš jako jeden `expect` v existujícím testu, samostatný test nemá cenu.
 - [ ] **Step 2:** `npm run test:run -- IndividualPlan` → FAIL.
 - [ ] **Step 3:** implementace. Tiskové styly `@media print` + `@page { size: A4; margin: 15mm; }`: skrýt navigaci, sidebar, tlačítka a denní záznamy (třída např. `print:hidden` v Tailwind v4), obsah na plnou šířku, bez tmavého režimu.
 - [ ] **Step 4:** testy PASS; ručně ověřit náhled tisku v Chrome (A4, jedna stránka hlavičky bez ořezu).
@@ -201,15 +201,42 @@
 - Test: `service/TaskCatalogIT.java`, `controller/TaskAccessIT.java`
 
 **Produces:**
-- `StatutoryTask(id, code String, name, unitType UnitType, maxUnitPrice Integer)`; `code` = označení v příloze vyhlášky
-- `GET /api/statutory-tasks` (všechny zaměstnanecké role)
-- `POST /api/tasks/import-statutory?organizationId=` → `List<TaskDTO>` vytvořených; SUPERADMIN, ADMIN
-- `int TaskService.importStatutoryTasks(Long organizationId)` vytvoří úkony jen pro položky, na které v organizaci ještě žádný úkon neodkazuje; cena = `maxUnitPrice`.
+- `StatutoryTask(id, code String, name, shortName, unitType UnitType, maxUnitPrice Integer)`; `code` = označení v § 6 odst. 1 (např. `a1`), `name` = oficiální znění, `shortName` = výchozí hovorový název (navrhne Claude v `statutory-tasks-draft.md`, potvrdí Michal)
+- Import nastaví `Task.name = shortName`; `Task.name` zůstává volně upravitelný (alias organizace), oficiální název je vždy dostupný přes odkaz
+- `TaskDTO` navíc `statutoryTaskCode`, `statutoryTaskName` (oficiální název)
+- Tabulka `statutory_hourly_limit(monthly_hours_threshold int, max_unit_price_over_threshold int)` s jedním řádkem `80`, `145` (pro Task 12b)
+- Rozhodnuto: hodinové položky mají `maxUnitPrice = 165`; importuje se všech 31 hodinových položek zvlášť.
+- `GET /api/statutory-tasks?organizationId=` (všechny zaměstnanecké role) → `List<StatutoryTaskDTO>` s `importedTaskId` (id úkonu organizace, který na položku odkazuje, jinak `null`)
+- `POST /api/tasks/import-statutory?organizationId=` s tělem `{"statutoryTaskIds": [..]}` → `List<TaskDTO>` vytvořených; SUPERADMIN, ADMIN
+- `List<Task> TaskService.importStatutoryTasks(Long organizationId, List<Long> statutoryTaskIds)` vytvoří úkony jen pro vybrané položky, na které v organizaci ještě žádný úkon neodkazuje (už importované tiše přeskočí); cena = `maxUnitPrice`.
 
 - [ ] **Step 1:** stáhnout aktuální znění vyhlášky č. 505/2006 Sb. (§ 6 pečovatelská služba, maximální výše úhrady ve znění 195/2024 Sb.) ze zakonyprolidi.cz, sepsat seznam úkonů s jednotkou a maximem a **nechat ho Michalovi potvrdit** před zapsáním do migrace.
-- [ ] **Step 2:** testy: import vytvoří všechny položky s cenou = maximum a odkazem; druhý import nevytvoří nic; ručně vytvořený úkon s odkazem se při importu přeskočí; uložení úkonu s cenou nad maximem → 400 „Cena převyšuje maximální úhradu podle vyhlášky (X Kč)“; úkon bez odkazu se nekontroluje; jednotka úkonu musí odpovídat jednotce položky → 400 „Jednotka úkonu neodpovídá položce vyhlášky“; přístupová matice.
+- [ ] **Step 2:** testy: import vytvoří jen vybrané položky; `importedTaskId` je vyplněné u importovaných a ručně navázaných; prázdný výběr → 400 „Vyberte alespoň jeden úkon“; import vytvoří položky s cenou = maximum, odkazem a názvem = `shortName`; přejmenovaný úkon dál vrací v `TaskDTO` oficiální `statutoryTaskName`; druhý import nevytvoří nic; ručně vytvořený úkon s odkazem se při importu přeskočí; uložení úkonu s cenou nad maximem → 400 „Cena převyšuje maximální úhradu podle vyhlášky (X Kč)“; úkon bez odkazu se nekontroluje; jednotka úkonu musí odpovídat jednotce položky → 400 „Jednotka úkonu neodpovídá položce vyhlášky“; přístupová matice.
 - [ ] **Step 3:** FAIL → implementace → PASS.
 - [ ] **Step 4:** commit `feat: tasks can be imported from and linked to the statutory catalog`
+
+### Task 12b [Claude]: Snížená sazba nad 80 hodin měsíčně (5)
+
+Pravidlo § 6 odst. 2: hodiny pečovatelské služby klienta v kalendářním měsíci nad 80 smějí stát nejvýš 145 Kč za hodinu. Před implementací ověřit přesné znění odstavce.
+
+**Files:**
+- Modify: `ReceiptFormatting.java` (seskupení řádků účtenky), `ReceiptService.java`, výpočty součtů nástěnky (`DashboardService` / `PerformedTaskRepository`), šablona účtenky jen pokud je potřeba nový popisek řádku
+- Test: `ReceiptFormattingTest`, `ReceiptIT`, `DashboardTotalsIT`, `PerformedTaskRepositoryIT`
+
+**Consumes:** `Task.statutoryTask`, `statutory_hourly_limit` (Task 12).
+
+**Produces:** cena měsíce klienta, ve které se hodinové úkony navázané na vyhlášku nad hranicí účtují cenou `min(uložená unit_price, max_unit_price_over_threshold)`. Nic se neukládá, počítá se při vyúčtování.
+
+- [ ] **Step 1:** testy (`ReceiptFormattingTest`, čistá funkce):
+  - 79 h po 165 Kč + záznam 2 h po 165 Kč → 80 h × 165 + 1 h × 145, záznam rozdělený na dva řádky;
+  - cena úkonu 140 Kč a 100 h → beze změny, žádné dělení řádků;
+  - fakultativní hodinový úkon (bez odkazu na vyhlášku) se do 80 h nepočítá a nesnižuje se;
+  - pořadí podle data záznamu, ne podle vložení: dodatečně vložený starší záznam posune hranici;
+  - úkony za úkon a za kg se do hodin nepočítají;
+  - zaokrouhlení jako `calculatePrice` (po záznamech, `HALF_UP`).
+- [ ] **Step 2:** `ReceiptIT` a `DashboardTotalsIT`: součet na nástěnce = součet účtenek i pro klienta nad 80 h.
+- [ ] **Step 3:** FAIL → implementace (jedna sdílená funkce pro účtenku i nástěnku; pokud nástěnka sčítá v SQL, převést výpočet nad hranicí do Javy nad načtenými záznamy, nebo ho v SQL replikovat a pokrýt testem shody) → PASS, celý `./mvnw verify`.
+- [ ] **Step 4:** commit `feat: hours over the monthly threshold are billed at the reduced statutory rate`
 
 ### Task 13 [Michal]: Úkony z vyhlášky a dokumenty – frontend (3, 5)
 
@@ -217,7 +244,7 @@
 
 **Consumes:** endpointy z Task 11 a 12.
 
-- [ ] **Step 1:** testy: import ukáže toast „Načteno N úkonů“ a obnoví seznam; výběr položky předvyplní jednotku a cenu; cena nad maximem ukáže chybu; dokumenty: seznam, nahrání (FormData), smazání po potvrzení; pečovatel sekci dokumentů nevidí vůbec.
+- [ ] **Step 1:** testy: „Načíst úkony z vyhlášky“ otevře dialog se seznamem položek s checkboxy (krátký název, pod ním oficiální, jednotka a maximum), už importované jsou zaškrtnuté a disabled s popiskem „Už v katalogu“, tlačítka „Vybrat vše“ / „Zrušit výběr“ pracují jen s neimportovanými; potvrzení pošle jen vybraná id, ukáže toast „Načteno N úkonů“ a obnoví seznam; když je vše importované, potvrzovací tlačítko je disabled; výběr položky předvyplní jednotku, cenu a název (`shortName`); cena nad maximem ukáže chybu; detail úkonu (`TaskSheet`) navázaného na vyhlášku zobrazuje celý oficiální název a kód (např. „§ 6 a) 1.“), i když je úkon přejmenovaný; seznam úkonů ho ukazuje menším textem pod názvem; dokumenty: seznam, nahrání (FormData), smazání po potvrzení; pečovatel sekci dokumentů nevidí vůbec.
 - [ ] **Step 2:** FAIL → implementace → PASS.
 - [ ] **Step 3:** commit `feat: statutory task import and client documents in the UI`
 

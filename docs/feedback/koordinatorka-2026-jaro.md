@@ -51,6 +51,8 @@ Otázka: brát úkony přímo z vyhlášky, nebo aspoň umožnit jejich import j
 - Šablona úkonů z vyhlášky (tabulka plněná migrací) a import do organizace jedním kliknutím (cena předvyplněná maximem, dál upravitelná). Vlastní (fakultativní) úkony jdou přidávat dál.
 - `Task` dostane nullable odkaz na položku vyhlášky: kontrola maximální ceny a přehled úkonů dotčených novelou.
 - Existující (ručně zadaný) úkon jde v editaci přiřadit k položce vyhlášky, aby se kontrola a pozdější výkazy týkaly i jich.
+- Importovaný úkon dostane krátký hovorový název, který jde dál přejmenovat. Oficiální název z vyhlášky je vždy vidět v detailu úkonu (a menším textem v seznamu).
+- Zeptat se koordinátorky: má být na účtence krátký, nebo oficiální název?
 - Výkazy po zákonných kategoriích zatím ne. Díky odkazu půjdou přidat později bez změny dat.
 - Před implementací ověřit přesné aktuální znění přílohy vyhlášky.
 

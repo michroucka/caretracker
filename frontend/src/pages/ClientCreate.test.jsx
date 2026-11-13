@@ -1,5 +1,5 @@
 import { screen, waitFor } from '@testing-library/react';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { ClientCreate } from './ClientCreate';
@@ -11,6 +11,8 @@ import { toIsoDate } from '@/lib/dates';
 
 const PLZEN = { id: 2, city: 'Plzeň' };
 const KLATOVY = { id: 3, city: 'Klatovy' };
+
+const NEXT_PERSONAL_NUMBERS = { [PLZEN.id]: '020043', [KLATOVY.id]: '030007' };
 
 const firstOfThisMonth = () => {
     const today = new Date();
@@ -25,11 +27,20 @@ function serveFormOptions() {
             { id: 11, firstName: 'Petr', lastName: 'Svoboda', department: KLATOVY },
         ])),
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
+        http.get(apiUrl('/departments/:id/next-personal-number'), ({ params }) =>
+            HttpResponse.json({ personalNumber: NEXT_PERSONAL_NUMBERS[params.id] })),
     );
 }
 
-function renderCreateForm() {
+async function chooseDepartment(user, name) {
+    await user.click(field('Středisko'));
+    await user.click(screen.getByRole('option', { name }));
+}
+
+// handlers passed here override the default form options, server.use gives the last registered handler priority
+function renderCreateForm(...overrides) {
     serveFormOptions();
+    server.use(...overrides);
     return renderWithProviders(
         <Routes>
             <Route path="/clients/new" element={<ClientCreate />} />
@@ -103,6 +114,7 @@ describe('ClientCreate', () => {
         await enterText(user, field('PSČ'), '301');
         await enterText(user, field('Telefon'), '12345');
         await enterText(user, field('E-mail'), 'marie@seznam');
+        await user.clear(field('Osobní číslo'));
         await enterText(user, field('Osobní číslo'), '42');
         await user.click(submitButton());
 
@@ -115,11 +127,64 @@ describe('ClientCreate', () => {
 
     it('keeps the personal number to at most six digits', async () => {
         const { user } = renderCreateForm();
-        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
 
+        await user.clear(field('Osobní číslo'));
         await user.type(field('Osobní číslo'), '12a34567');
 
         expect(field('Osobní číslo')).toHaveValue('123456');
+    });
+
+    it('prefills the next personal number of the preselected department', async () => {
+        renderCreateForm();
+
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+    });
+
+    it('prefills the personal number of a newly chosen department', async () => {
+        const { user } = renderCreateForm();
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+
+        await chooseDepartment(user, 'Klatovy');
+
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('030007'));
+    });
+
+    it('keeps a personal number the user typed when the department changes', async () => {
+        const { user } = renderCreateForm();
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+        await user.clear(field('Osobní číslo'));
+        await enterText(user, field('Osobní číslo'), '029999');
+
+        await chooseDepartment(user, 'Klatovy');
+
+        expect(field('Osobní číslo')).toHaveValue('029999');
+    });
+
+    it('ignores a late number of a department that is no longer chosen', async () => {
+        const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/next-personal-number'), async ({ params }) => {
+            if (Number(params.id) === PLZEN.id) await delay(200);
+            return HttpResponse.json({ personalNumber: NEXT_PERSONAL_NUMBERS[params.id] });
+        }));
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+        await chooseDepartment(user, 'Klatovy');
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('030007'));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        expect(field('Osobní číslo')).toHaveValue('030007');
+    });
+
+    it('leaves the personal number empty when the next number cannot be loaded', async () => {
+        const creations = serveAndRecord('post', '/clients', () => HttpResponse.json({ id: 55 }));
+        const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/next-personal-number'), serverError('Chyba serveru', 500)));
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+
+        await user.click(submitButton());
+
+        await waitFor(() => expect(creations).toHaveLength(1));
+        expect(creations[0].body.personalNumber).toBeNull();
     });
 
     it('offers only caregivers of the chosen department', async () => {
@@ -139,6 +204,7 @@ describe('ClientCreate', () => {
 
         await enterText(user, field('Telefon'), '+420777123456');
         await enterText(user, field('E-mail'), 'marie@example.cz');
+        await user.clear(field('Osobní číslo'));
         await enterText(user, field('Osobní číslo'), '010042');
         await user.click(field('Úkony'));
         await user.click(screen.getByRole('option', { name: 'Úklid' }));

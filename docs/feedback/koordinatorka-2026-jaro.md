@@ -53,6 +53,8 @@ Otázka: brát úkony přímo z vyhlášky, nebo aspoň umožnit jejich import j
 - Existující (ručně zadaný) úkon jde v editaci přiřadit k položce vyhlášky, aby se kontrola a pozdější výkazy týkaly i jich.
 - Importovaný úkon dostane krátký hovorový název, který jde dál přejmenovat. Oficiální název z vyhlášky je vždy vidět v detailu úkonu (a menším textem v seznamu).
 - Zeptat se koordinátorky: má být na účtence krátký, nebo oficiální název?
+- Sazba nad 80 hodin měsíčně: implementováno „145 Kč jen za hodiny nad 80“. Ověřit s koordinátorkou, jestli se nemá po překročení 80 h účtovat 145 Kč za všechny hodiny měsíce.
+- Seznam provedených úkonů ukazuje plnou cenu záznamu, snížená sazba nad 80 h se projeví až v měsíčním vyúčtování (účtenka, nástěnka).
 - Výkazy po zákonných kategoriích zatím ne. Díky odkazu půjdou přidat později bez změny dat.
 - Před implementací ověřit přesné aktuální znění přílohy vyhlášky.
 

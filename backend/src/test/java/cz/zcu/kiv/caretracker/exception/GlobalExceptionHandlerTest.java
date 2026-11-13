@@ -89,6 +89,8 @@ class GlobalExceptionHandlerTest {
         return Stream.of(
                 Arguments.of("duplicate key value violates unique constraint \"idx_client_personal_number_organization\"",
                         "Osobní číslo již existuje"),
+                Arguments.of("duplicate key value violates unique constraint \"idx_department_number_organization\"",
+                        "Středisko s tímto číslem už v organizaci existuje"),
                 Arguments.of("duplicate key value violates unique constraint \"users_username_key\"",
                         "Uživatelské jméno již existuje"),
                 Arguments.of("duplicate key value violates unique constraint \"users_email_key\"", "Email již existuje"),

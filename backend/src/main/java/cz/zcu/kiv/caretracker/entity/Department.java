@@ -24,7 +24,7 @@ public class Department {
     @Column(name = "postal_code", nullable = false, length = 6)
     private String postalCode;
 
-    @Column
+    @Column(nullable = false)
     private Integer departmentNumber;
 
     @Column(nullable = false)

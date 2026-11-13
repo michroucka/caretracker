@@ -15,6 +15,8 @@ import cz.zcu.kiv.caretracker.repository.UserRepository;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
@@ -26,6 +28,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -62,7 +65,7 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     void newDepartmentBelongsToAdminsOrganizationAndPromotesItsCoordinator() throws Exception {
         Employee caregiver = testData.employee(department, EmployeeRole.CAREGIVER);
 
-        long id = createdId(perform(post("/api/departments"), departmentRequest(caregiver)).andExpect(status().isOk()));
+        long id = createdId(perform(post("/api/departments"), newDepartmentRequest(caregiver, 90)).andExpect(status().isOk()));
 
         Department saved = departmentRepository.findById(id).orElseThrow();
         assertThat(saved.getActive()).isTrue();
@@ -75,9 +78,9 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     void replacedCoordinatorFallsBackToCaregiver() throws Exception {
         Employee previous = testData.employee(department, EmployeeRole.CAREGIVER);
         Employee next = testData.employee(department, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(previous)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, previous)).andExpect(status().isOk());
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(next)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, next)).andExpect(status().isOk());
 
         assertRoles(previous, EmployeeRole.CAREGIVER, UserRole.CAREGIVER);
         assertRoles(next, EmployeeRole.COORDINATOR, UserRole.COORDINATOR);
@@ -86,9 +89,9 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     @Test
     void removedCoordinatorFallsBackToCaregiver() throws Exception {
         Employee coordinator = testData.employee(department, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinator)).andExpect(status().isOk());
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(null)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, null)).andExpect(status().isOk());
 
         assertThat(departmentRepository.findById(department.getId()).orElseThrow().getCoordinator()).isNull();
         assertRoles(coordinator, EmployeeRole.CAREGIVER, UserRole.CAREGIVER);
@@ -97,9 +100,9 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     @Test
     void keepingTheSameCoordinatorChangesNoRole() throws Exception {
         Employee coordinator = testData.employee(department, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinator)).andExpect(status().isOk());
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinator)).andExpect(status().isOk());
 
         assertRoles(coordinator, EmployeeRole.COORDINATOR, UserRole.COORDINATOR);
     }
@@ -108,10 +111,10 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     void managerCoordinatingDepartmentKeepsManagerRole() throws Exception {
         Employee manager = testData.employee(department, EmployeeRole.MANAGER);
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(manager)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, manager)).andExpect(status().isOk());
         assertRoles(manager, EmployeeRole.MANAGER, UserRole.ADMIN);
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(null)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, null)).andExpect(status().isOk());
         assertRoles(manager, EmployeeRole.MANAGER, UserRole.ADMIN);
     }
 
@@ -122,10 +125,10 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
         account.setRole(UserRole.ADMIN);
         userRepository.save(account);
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(caregiverWithAdminAccount)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, caregiverWithAdminAccount)).andExpect(status().isOk());
         assertRoles(caregiverWithAdminAccount, EmployeeRole.COORDINATOR, UserRole.ADMIN);
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(null)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, null)).andExpect(status().isOk());
         assertRoles(caregiverWithAdminAccount, EmployeeRole.CAREGIVER, UserRole.ADMIN);
     }
 
@@ -144,7 +147,7 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     @Test
     void activeEmployeeBlocksTermination() throws Exception {
         Employee coordinator = testData.employee(department, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinator)).andExpect(status().isOk());
 
         perform(put("/api/departments/{id}/terminate", department.getId())).andExpect(status().isBadRequest());
 
@@ -163,7 +166,7 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
         formerCaregiver.setActive(false);
         employeeRepository.save(formerCaregiver);
         Employee coordinatorFromElsewhere = testData.employee(testData.department(organization), EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinatorFromElsewhere)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinatorFromElsewhere)).andExpect(status().isOk());
 
         perform(put("/api/departments/{id}/terminate", department.getId())).andExpect(status().isOk());
 
@@ -188,9 +191,9 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     void coordinatorOfAnotherDepartmentCannotBeAssigned() throws Exception {
         Department otherDepartment = testData.department(organization);
         Employee coordinator = testData.employee(otherDepartment, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", otherDepartment.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", otherDepartment.getId()), departmentRequest(otherDepartment, coordinator)).andExpect(status().isOk());
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(coordinator)).andExpect(status().isBadRequest());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, coordinator)).andExpect(status().isBadRequest());
 
         assertThat(departmentRepository.findById(department.getId()).orElseThrow().getCoordinator()).isNull();
     }
@@ -199,13 +202,54 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
     void employeeStillCoordinatingAnotherDepartmentStaysCoordinator() throws Exception {
         Department otherDepartment = testData.department(organization);
         Employee coordinator = testData.employee(otherDepartment, EmployeeRole.CAREGIVER);
-        perform(put("/api/departments/{id}", otherDepartment.getId()), departmentRequest(coordinator)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", otherDepartment.getId()), departmentRequest(otherDepartment, coordinator)).andExpect(status().isOk());
         department.setCoordinator(coordinator);
         departmentRepository.save(department);
 
-        perform(put("/api/departments/{id}", department.getId()), departmentRequest(null)).andExpect(status().isOk());
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, null)).andExpect(status().isOk());
 
         assertRoles(coordinator, EmployeeRole.COORDINATOR, UserRole.COORDINATOR);
+    }
+
+    @Test
+    void departmentNumberIsRequired() throws Exception {
+        perform(post("/api/departments"), newDepartmentRequest(null, null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Číslo střediska je povinné"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 100})
+    void departmentNumberOutsideRangeIsRejected(int departmentNumber) throws Exception {
+        perform(post("/api/departments"), newDepartmentRequest(null, departmentNumber))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Číslo střediska musí být mezi 1 a 99"));
+    }
+
+    @Test
+    void departmentNumberMustBeUniqueWithinOrganization() throws Exception {
+        perform(post("/api/departments"), newDepartmentRequest(null, department.getDepartmentNumber()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Středisko s tímto číslem už v organizaci existuje"));
+    }
+
+    @Test
+    void departmentKeepsItsOwnNumberOnUpdate() throws Exception {
+        perform(put("/api/departments/{id}", department.getId()), departmentRequest(department, null)).andExpect(status().isOk());
+
+        assertThat(departmentRepository.findById(department.getId()).orElseThrow().getDepartmentNumber())
+                .isEqualTo(department.getDepartmentNumber());
+    }
+
+    @Test
+    void sameDepartmentNumberIsAllowedInAnotherOrganization() throws Exception {
+        Organization otherOrganization = testData.organization();
+        testData.department(otherOrganization);
+        testData.department(otherOrganization);
+        Department foreignDepartment = testData.department(otherOrganization);
+
+        perform(post("/api/departments"), newDepartmentRequest(null, foreignDepartment.getDepartmentNumber()))
+                .andExpect(status().isOk());
     }
 
     private void assertRoles(Employee employee, EmployeeRole employeeRole, UserRole accountRole) {
@@ -227,11 +271,16 @@ class DepartmentLifecycleIT extends AbstractIntegrationTest {
         return perform(request.contentType(MediaType.APPLICATION_JSON).content(json(body)));
     }
 
-    private static Map<String, Object> departmentRequest(Employee coordinator) {
+    private static Map<String, Object> departmentRequest(Department department, Employee coordinator) {
+        return newDepartmentRequest(coordinator, department.getDepartmentNumber());
+    }
+
+    private static Map<String, Object> newDepartmentRequest(Employee coordinator, Integer departmentNumber) {
         Map<String, Object> request = new HashMap<>();
         request.put("street", "Náměstí 1");
         request.put("city", "Plzeň");
         request.put("postalCode", "301 00");
+        request.put("departmentNumber", departmentNumber);
         request.put("coordinatorId", coordinator != null ? coordinator.getId() : null);
         return request;
     }

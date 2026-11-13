@@ -80,6 +80,7 @@ public class TestData {
         department.setStreet("Testovací " + next());
         department.setCity("Plzeň");
         department.setPostalCode("301 00");
+        department.setDepartmentNumber(departmentRepository.findByOrganizationId(organization.getId()).size() + 1);
         return departmentRepository.save(department);
     }
 

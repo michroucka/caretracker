@@ -1,5 +1,6 @@
 package cz.zcu.kiv.caretracker.controller;
 
+import cz.zcu.kiv.caretracker.dto.client.PersonalNumberDTO;
 import cz.zcu.kiv.caretracker.dto.department.DepartmentDTO;
 import cz.zcu.kiv.caretracker.dto.department.DepartmentRequestDTO;
 import cz.zcu.kiv.caretracker.entity.Department;
@@ -37,6 +38,12 @@ public class DepartmentController {
         List<DepartmentDTO> departments = departmentService.getDepartments(organizationId, status);
 
         return ResponseEntity.ok(departments);
+    }
+
+    @GetMapping("/{id}/next-personal-number")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'COORDINATOR')")
+    public ResponseEntity<PersonalNumberDTO> getNextPersonalNumber(@PathVariable Long id) {
+        return ResponseEntity.ok(new PersonalNumberDTO(departmentService.nextPersonalNumber(id)));
     }
 
     @GetMapping("/{id}")

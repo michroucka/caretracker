@@ -46,6 +46,7 @@ class UnauthenticatedAccessIT extends AbstractIntegrationTest {
 
             "GET /api/departments",
             "GET /api/departments/{id}",
+            "GET /api/departments/{id}/next-personal-number",
             "POST /api/departments",
             "PUT /api/departments/{id}",
             "PUT /api/departments/{id}/terminate",
@@ -82,6 +83,10 @@ class UnauthenticatedAccessIT extends AbstractIntegrationTest {
             "GET /api/clients/{id}/picture",
             "POST /api/clients/{id}/picture",
             "DELETE /api/clients/{id}/picture",
+            "GET /api/clients/{id}/documents",
+            "POST /api/clients/{id}/documents",
+            "GET /api/clients/{id}/documents/{documentId}",
+            "DELETE /api/clients/{id}/documents/{documentId}",
             "GET /api/clients/{id}/individual-plan",
             "GET /api/clients/{id}/individual-plan/history",
             "GET /api/clients/{id}/individual-plan/{version}",

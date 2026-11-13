@@ -2,6 +2,7 @@ package cz.zcu.kiv.caretracker.support;
 
 import cz.zcu.kiv.caretracker.entity.*;
 import cz.zcu.kiv.caretracker.enums.BenefitLevel;
+import cz.zcu.kiv.caretracker.enums.ClientDocumentType;
 import cz.zcu.kiv.caretracker.enums.EmployeeRole;
 import cz.zcu.kiv.caretracker.enums.Gender;
 import cz.zcu.kiv.caretracker.enums.UnitType;
@@ -10,6 +11,7 @@ import cz.zcu.kiv.caretracker.repository.*;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,6 +29,9 @@ public class TestData {
 
     public static final String PASSWORD = "Heslo123!";
 
+    /** Smallest content that passes as a PDF: the {@code %PDF-} signature. */
+    public static final byte[] PDF = "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.US_ASCII);
+
     private final AtomicInteger sequence = new AtomicInteger();
 
     private final OrganizationRepository organizationRepository;
@@ -38,6 +43,7 @@ public class TestData {
     private final DailyRecordRepository dailyRecordRepository;
     private final TaskRepository taskRepository;
     private final PerformedTaskRepository performedTaskRepository;
+    private final ClientDocumentRepository clientDocumentRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
@@ -53,6 +59,7 @@ public class TestData {
                     DailyRecordRepository dailyRecordRepository,
                     TaskRepository taskRepository,
                     PerformedTaskRepository performedTaskRepository,
+                    ClientDocumentRepository clientDocumentRepository,
                     PasswordEncoder passwordEncoder,
                     Clock clock) {
         this.organizationRepository = organizationRepository;
@@ -64,6 +71,7 @@ public class TestData {
         this.dailyRecordRepository = dailyRecordRepository;
         this.taskRepository = taskRepository;
         this.performedTaskRepository = performedTaskRepository;
+        this.clientDocumentRepository = clientDocumentRepository;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
     }
@@ -80,6 +88,7 @@ public class TestData {
         department.setStreet("Testovací " + next());
         department.setCity("Plzeň");
         department.setPostalCode("301 00");
+        department.setDepartmentNumber(departmentRepository.findByOrganizationId(organization.getId()).size() + 1);
         return departmentRepository.save(department);
     }
 
@@ -99,9 +108,15 @@ public class TestData {
         return employee;
     }
 
-    /** Client in the caregiver's department and organization. */
+    /** Client in the caregiver's department and organization, with a personal number from the department's range. */
     public Client client(Employee caregiver) {
+        int departmentNumber = departmentRepository.findById(caregiver.getDepartment().getId()).orElseThrow().getDepartmentNumber();
+        return client(caregiver, "%02d%04d".formatted(departmentNumber, next() % 10_000));
+    }
+
+    public Client client(Employee caregiver, String personalNumber) {
         Client client = new Client();
+        client.setPersonalNumber(personalNumber);
         client.setFirstName("Petr");
         client.setLastName("Test " + next());
         client.setGender(Gender.MALE);
@@ -115,6 +130,22 @@ public class TestData {
         client.setOrganization(caregiver.getOrganization());
         client.setCaregiver(caregiver);
         return clientRepository.save(client);
+    }
+
+    public ClientDocument clientDocument(Client client) {
+        return clientDocument(client, ClientDocumentType.CONTRACT, LocalDateTime.now(clock));
+    }
+
+    public ClientDocument clientDocument(Client client, ClientDocumentType type, LocalDateTime uploadedAt) {
+        ClientDocument document = new ClientDocument();
+        document.setClient(client);
+        document.setType(type);
+        document.setFileName("dokument-" + next() + ".pdf");
+        document.setContentType("application/pdf");
+        document.setSize((long) PDF.length);
+        document.setData(PDF);
+        document.setUploadedAt(uploadedAt);
+        return clientDocumentRepository.save(document);
     }
 
     /** Active login account of the client itself (role CLIENT). */

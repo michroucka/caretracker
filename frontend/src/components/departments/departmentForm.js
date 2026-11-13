@@ -14,6 +14,8 @@ export function validateDepartment(values) {
     const errors = {};
     if (!values.street.trim()) errors.street = "Prosím zadejte ulici";
     if (!values.city.trim()) errors.city = "Prosím zadejte město";
+    if (!values.departmentNumber) errors.departmentNumber = "Číslo střediska je povinné";
+    else if (Number(values.departmentNumber) < 1 || Number(values.departmentNumber) > 99) errors.departmentNumber = "Číslo střediska musí být mezi 1 a 99";
     if (values.postalCode && values.postalCode.replace(/\D/g, "").length !== 5) errors.postalCode = "PSČ má 5 číslic";
     return errors;
 }

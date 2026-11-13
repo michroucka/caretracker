@@ -48,11 +48,12 @@ class ReceiptFormattingTest {
 
     @ParameterizedTest(name = "{0}/{1}, klient {2} → {3}")
     @CsvSource({
-            "11, 2026, 123,    2611000123",
-            "1,  2027, 7,      2701000007",
+            "11, 2026, 000123, 2611000123",
+            "1,  2027, 010007, 2701010007",
             "12, 2000, 999999, 0012999999",
+            "3,  2026, 010042, 2603010042",
     })
-    void variableSymbolIsYearMonthAndPersonalNumber(int month, int year, long personalNumber, String expected) {
+    void variableSymbolIsYearMonthAndPersonalNumber(int month, int year, String personalNumber, String expected) {
         assertEquals(expected, ReceiptFormatting.variableSymbol(personalNumber, month, year));
     }
 

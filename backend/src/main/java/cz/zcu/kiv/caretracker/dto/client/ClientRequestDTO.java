@@ -13,7 +13,7 @@ public class ClientRequestDTO {
     private String firstName;
     private String lastName;
     private String gender;
-    private Long personalNumber;
+    private String personalNumber;
     private LocalDate dateOfBirth;
     private String email;
     private String phone;

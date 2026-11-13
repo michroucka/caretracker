@@ -210,6 +210,7 @@ class DepartmentAccessIT extends AbstractIntegrationTest {
         request.put("city", "Klatovy");
         request.put("postalCode", "33901");
         request.put("organizationId", organizationId);
+        request.put("departmentNumber", 90);
         return request;
     }
 }

@@ -19,7 +19,7 @@ export function toFormValues(client) {
         lastName: client?.lastName ?? "",
         gender: client?.gender ?? "",
         dateOfBirth: client?.dateOfBirth ?? "",
-        personalNumber: client?.personalNumber != null ? String(client.personalNumber) : "",
+        personalNumber: client?.personalNumber ?? "",
         departmentId: client?.department?.id ?? null,
         caregiverId: client?.caregiver?.id ?? null,
         street: client?.street ?? "",
@@ -53,9 +53,8 @@ export function validateClient(values, { withTermination = false } = {}) {
     else if (!POSTAL_CODE.test(values.postalCode)) errors.postalCode = "PSČ ve tvaru 123 45";
     if (values.email.trim() && !EMAIL.test(values.email.trim())) errors.email = "Zadejte platnou e-mailovou adresu";
     if (values.phone && !PHONE.test(values.phone)) errors.phone = "Telefon ve tvaru 123 456 789 nebo +420 123 456 789";
-    if (values.personalNumber && !/^\d+$/.test(values.personalNumber)) errors.personalNumber = "Osobní číslo může obsahovat jen číslice";
     // the number goes into the 10-digit payment variable symbol after year and month
-    else if (values.personalNumber && (Number(values.personalNumber) < 1 || values.personalNumber.length > 6)) errors.personalNumber = "Osobní číslo musí být mezi 1 a 999999";
+    if (values.personalNumber && !/^\d{6}$/.test(values.personalNumber)) errors.personalNumber = "Osobní číslo musí mít 6 číslic";
     if (withTermination) {
         if (!values.terminationDate) errors.terminationDate = "Prosím zadejte datum ukončení";
         else if (values.terminationDate > todayIsoDate()) errors.terminationDate = "Datum ukončení nemůže být v budoucnosti";
@@ -73,7 +72,7 @@ export function toRequest(values) {
         lastName: values.lastName.trim(),
         gender: values.gender,
         dateOfBirth: values.dateOfBirth,
-        personalNumber: values.personalNumber ? Number(values.personalNumber) : null,
+        personalNumber: values.personalNumber || null,
         departmentId: values.departmentId,
         caregiverId: values.caregiverId,
         street: values.street.trim(),

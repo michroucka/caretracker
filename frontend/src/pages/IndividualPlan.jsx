@@ -221,7 +221,8 @@ function IndividualPlan() {
     }
 
     // a terminated client's plan and daily records are read-only
-    const canEdit = client.active && (isAdmin || user.employeeId === client.caregiver?.id);
+    const isClientsCoordinator = user.role === ROLES.COORDINATOR && user.departmentId === client.department?.id;
+    const canEdit = client.active && (isAdmin || isClientsCoordinator || user.employeeId === client.caregiver?.id);
     const latestVersion = individualPlan?.currentContent?.versionNumber;
     const isViewingOldVersion = selectedVersion != null && latestVersion != null && selectedVersion !== latestVersion;
     const fullName = `${client.firstName} ${client.lastName}`;

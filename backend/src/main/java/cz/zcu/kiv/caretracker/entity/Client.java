@@ -33,8 +33,8 @@ public class Client {
     @Column(nullable = false)
     private Gender gender;
 
-    @Column(name = "personal_number")
-    private Long personalNumber;
+    @Column(name = "personal_number", nullable = false, length = 6)
+    private String personalNumber;
 
     @Column(name = "date_of_birth", nullable = false)
     private LocalDate dateOfBirth;

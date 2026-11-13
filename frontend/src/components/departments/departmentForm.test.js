@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { coordinatorOptions, EMPTY_DEPARTMENT, formatAddress, toFormValues, toRequest, validateDepartment } from "./departmentForm";
 
-const validDepartment = { ...EMPTY_DEPARTMENT, street: "Hlavní 1", city: "Plzeň" };
+const validDepartment = { ...EMPTY_DEPARTMENT, street: "Hlavní 1", city: "Plzeň", departmentNumber: "3" };
 
 describe("toFormValues", () => {
     it("matches the empty form for a new department", () => {
@@ -16,7 +16,7 @@ describe("toFormValues", () => {
 });
 
 describe("validateDepartment", () => {
-    it("accepts a street and a city", () => {
+    it("accepts a street, a city and a department number", () => {
         expect(validateDepartment(validDepartment)).toEqual({});
     });
 
@@ -25,6 +25,18 @@ describe("validateDepartment", () => {
             street: "Prosím zadejte ulici",
             city: "Prosím zadejte město",
         });
+    });
+
+    it("requires the department number", () => {
+        expect(validateDepartment({ ...validDepartment, departmentNumber: "" }).departmentNumber).toBe("Číslo střediska je povinné");
+    });
+
+    it.each(["1", "99"])("accepts the department number %j", (departmentNumber) => {
+        expect(validateDepartment({ ...validDepartment, departmentNumber }).departmentNumber).toBeUndefined();
+    });
+
+    it.each(["0", "100"])("rejects the department number %j", (departmentNumber) => {
+        expect(validateDepartment({ ...validDepartment, departmentNumber }).departmentNumber).toBe("Číslo střediska musí být mezi 1 a 99");
     });
 
     it.each(["", "30100", "301 00"])("accepts the postal code %j", (postalCode) => {
@@ -42,7 +54,7 @@ describe("toRequest", () => {
             street: "Hlavní 1",
             city: "Plzeň",
             postalCode: null,
-            departmentNumber: null,
+            departmentNumber: 3,
             coordinatorId: null,
             organizationId: null,
         });

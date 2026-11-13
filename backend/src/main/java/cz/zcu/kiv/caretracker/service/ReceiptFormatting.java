@@ -25,9 +25,9 @@ final class ReceiptFormatting {
         return tasks.stream().mapToInt(PerformedTask::calculatePrice).sum();
     }
 
-    /** Year, month and client's personal number: November 2026 for client 123 → "2611000123". */
-    static String variableSymbol(Long personalNumber, int month, int year) {
-        return String.format("%02d%02d%06d", year % 100, month, personalNumber);
+    /** Year, month and client's six-digit personal number: November 2026 for client 010042 → "2611010042". */
+    static String variableSymbol(String personalNumber, int month, int year) {
+        return String.format("%02d%02d%s", year % 100, month, personalNumber);
     }
 
     /**

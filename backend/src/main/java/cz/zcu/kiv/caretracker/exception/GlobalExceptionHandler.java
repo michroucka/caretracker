@@ -2,6 +2,8 @@ package cz.zcu.kiv.caretracker.exception;
 
 import tools.jackson.core.JacksonException;
 import cz.zcu.kiv.caretracker.dto.ErrorResponse;
+import cz.zcu.kiv.caretracker.service.ClientService;
+import cz.zcu.kiv.caretracker.service.DepartmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +45,9 @@ public class GlobalExceptionHandler {
         if (ex.getMessage().contains("duplicate key") || ex.getMessage().contains("unique constraint")) {
             if (ex.getMessage().contains("personal_number") ||
                 ex.getMessage().contains("idx_client_personal_number_organization")) {
-                message = "Osobní číslo již existuje";
+                message = ClientService.DUPLICATE_PERSONAL_NUMBER_MESSAGE;
+            } else if (ex.getMessage().contains("idx_department_number_organization")) {
+                message = DepartmentService.DUPLICATE_DEPARTMENT_NUMBER_MESSAGE;
             } else if (ex.getMessage().contains("username")) {
                 message = "Uživatelské jméno již existuje";
             } else if (ex.getMessage().contains("email")) {

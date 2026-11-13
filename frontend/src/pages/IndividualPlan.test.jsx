@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import IndividualPlan from './IndividualPlan';
 import { renderWithProviders } from '@/test/render';
 import { apiUrl, server } from '@/test/server';
-import { caregiver } from '@/test/users';
+import { caregiver, coordinator } from '@/test/users';
 
 const CAREGIVER_ID = 10;
 
@@ -44,13 +44,17 @@ function serveClient(clientData, planData = plan) {
     );
 }
 
-function renderPlanAsClientsCaregiver() {
+function renderPlanAs(authStatus) {
     return renderWithProviders(
         <Routes>
             <Route path="/clients/:clientId/individual-plan" element={<IndividualPlan />} />
         </Routes>,
-        { authStatus: caregiver({ employeeId: CAREGIVER_ID }), route: '/clients/7/individual-plan' },
+        { authStatus, route: '/clients/7/individual-plan' },
     );
+}
+
+function renderPlanAsClientsCaregiver() {
+    return renderPlanAs(caregiver({ employeeId: CAREGIVER_ID }));
 }
 
 describe('IndividualPlan', () => {
@@ -74,6 +78,23 @@ describe('IndividualPlan', () => {
 
         await user.click(await screen.findByRole('button', { name: /Tisk/ }));
         expect(print).toHaveBeenCalledOnce();
+    });
+
+    it("lets the coordinator of the client's department add a version", async () => {
+        serveClient(client({ active: true }));
+
+        renderPlanAs(coordinator({ employeeId: 99, departmentId: 2 }));
+
+        expect(await screen.findByRole('button', { name: /Nová verze/ })).toBeInTheDocument();
+    });
+
+    it('does not let a coordinator of another department add a version', async () => {
+        serveClient(client({ active: true }));
+
+        renderPlanAs(coordinator({ employeeId: 99, departmentId: 3 }));
+
+        expect(await screen.findByText('Procházky')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Nová verze/ })).not.toBeInTheDocument();
     });
 
     it('is read-only for a terminated client', async () => {

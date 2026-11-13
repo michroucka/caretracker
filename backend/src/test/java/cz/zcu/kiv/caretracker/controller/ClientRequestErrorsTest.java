@@ -6,6 +6,7 @@ import cz.zcu.kiv.caretracker.mapper.ClientMapper;
 import cz.zcu.kiv.caretracker.repository.UserRepository;
 import cz.zcu.kiv.caretracker.security.handler.CustomAuthenticationFailureHandler;
 import cz.zcu.kiv.caretracker.security.handler.CustomAuthenticationSuccessHandler;
+import cz.zcu.kiv.caretracker.service.ClientDocumentService;
 import cz.zcu.kiv.caretracker.service.ClientService;
 import cz.zcu.kiv.caretracker.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,8 @@ class ClientRequestErrorsTest {
     @MockitoBean
     private ClientService clientService;
     @MockitoBean
+    private ClientDocumentService clientDocumentService;
+    @MockitoBean
     private ClientMapper clientMapper;
     @MockitoBean
     private UserService userService;
@@ -81,8 +84,8 @@ class ClientRequestErrorsTest {
 
     @Test
     void textInNumberFieldNamesTheField() throws Exception {
-        perform(post("/api/clients").contentType(MediaType.APPLICATION_JSON).content("{\"personalNumber\": \"abc\"}"))
-                .andExpect(error(400, "Neplatná hodnota pole 'personalNumber'"));
+        perform(post("/api/clients").contentType(MediaType.APPLICATION_JSON).content("{\"departmentId\": \"abc\"}"))
+                .andExpect(error(400, "Neplatná hodnota pole 'departmentId'"));
     }
 
     @Test

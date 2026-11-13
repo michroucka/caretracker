@@ -13,6 +13,7 @@ import cz.zcu.kiv.caretracker.repository.ClientRepository;
 import cz.zcu.kiv.caretracker.repository.DepartmentRepository;
 import cz.zcu.kiv.caretracker.repository.EmployeeRepository;
 import cz.zcu.kiv.caretracker.repository.OrganizationRepository;
+import cz.zcu.kiv.caretracker.repository.StatutoryTaskRepository;
 import cz.zcu.kiv.caretracker.repository.TaskRepository;
 import cz.zcu.kiv.caretracker.repository.UserRepository;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
@@ -46,6 +47,9 @@ class DashboardTotalsIT extends AbstractIntegrationTest {
 
     @Autowired
     private TaskRepository taskRepository;
+
+    @Autowired
+    private StatutoryTaskRepository statutoryTaskRepository;
 
     @Autowired
     private DepartmentRepository departmentRepository;
@@ -218,6 +222,28 @@ class DashboardTotalsIT extends AbstractIntegrationTest {
         assertThat(JsonPath.<List<Integer>>read(dashboard, "$.caregiverWorkload[*].minutes")).containsExactly(90, 30);
         // a task performed by two caregivers is one task of the department
         assertThat(JsonPath.<Integer>read(dashboard, "$.tasksPerformedCount")).isEqualTo(3);
+    }
+
+    @Test
+    void incomeOverEightyStatutoryHoursMatchesTheReceipt() throws Exception {
+        Task dressing = testData.task(organization, UnitType.HOUR, 165);
+        dressing.setStatutoryTask(statutoryTaskRepository.findByCode("a3").orElseThrow());
+        taskRepository.save(dressing);
+        // the threshold counts per calendar month: December hours do not move January's
+        testData.performedTask(client, dressing, LocalDateTime.of(2026, 12, 20, 8, 0), 30 * 60);
+        testData.performedTask(client, dressing, LocalDateTime.of(2027, 1, 6, 8, 0), 2 * 60);
+        testData.performedTask(client, dressing, LocalDateTime.of(2027, 1, 5, 8, 0), 79 * 60);
+        testData.performedTask(client, visit, LocalDateTime.of(2027, 1, 7, 8, 0), 1);
+
+        // 80 h at 165 + 1 h at 145 + one visit at 40, as on the receipt
+        int januaryIncome = 80 * 165 + 145 + 40;
+        for (String dashboard : List.of(dashboard(admin.getUser(), "ORGANIZATION"), dashboard(coordinator.getUser(), "DEPARTMENT"))) {
+            assertThat(JsonPath.<Integer>read(dashboard, "$.totalMonthlyIncome")).isEqualTo(januaryIncome);
+            assertThat(JsonPath.<List<Integer>>read(dashboard, "$.monthlyIncomeHistory").subList(10, 12))
+                    .containsExactly(30 * 165, januaryIncome);
+        }
+        assertThat(JsonPath.<List<Integer>>read(dashboard(admin.getUser(), "ORGANIZATION"), "$.tasksPerformedByDepartment[*].income"))
+                .containsExactly(januaryIncome);
     }
 
     @Test

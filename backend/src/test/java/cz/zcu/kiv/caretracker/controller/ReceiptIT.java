@@ -7,8 +7,11 @@ import cz.zcu.kiv.caretracker.entity.Organization;
 import cz.zcu.kiv.caretracker.entity.Task;
 import cz.zcu.kiv.caretracker.entity.User;
 import cz.zcu.kiv.caretracker.enums.EmployeeRole;
+import cz.zcu.kiv.caretracker.enums.UnitType;
 import cz.zcu.kiv.caretracker.repository.ClientRepository;
 import cz.zcu.kiv.caretracker.repository.OrganizationRepository;
+import cz.zcu.kiv.caretracker.repository.StatutoryTaskRepository;
+import cz.zcu.kiv.caretracker.repository.TaskRepository;
 import cz.zcu.kiv.caretracker.service.PaymentQrClient.PaymentAccount;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import cz.zcu.kiv.caretracker.support.TestImages;
@@ -51,6 +54,12 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Autowired
     private ClientRepository clientRepository;
+
+    @Autowired
+    private TaskRepository taskRepository;
+
+    @Autowired
+    private StatutoryTaskRepository statutoryTaskRepository;
 
     private Department department;
     private Employee coordinator;
@@ -101,6 +110,25 @@ class ReceiptIT extends AbstractIntegrationTest {
 
         assertThat(pdf).startsWith("%PDF".getBytes());
         verify(paymentQrClient).fetchPng(ACCOUNT, 300, "2611000123");
+    }
+
+    @Test
+    void hoursOverEightyInTheMonthAreBilledAtReducedStatutoryRate() throws Exception {
+        Client client = client("Novák", "000123");
+        Task dressing = testData.task(task.getOrganization(), UnitType.HOUR, 165);
+        dressing.setStatutoryTask(statutoryTaskRepository.findByCode("a3").orElseThrow());
+        taskRepository.save(dressing);
+        testData.performedTask(client, dressing, NOVEMBER_FIRST_MORNING, 79 * 60);
+        testData.performedTask(client, dressing, NOVEMBER_FIRST_MORNING.plusDays(1), 2 * 60);
+
+        mockMvc.perform(get("/api/performed-tasks/receipt")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(caregiver)))
+                .andExpect(status().isOk());
+
+        verify(paymentQrClient).fetchPng(ACCOUNT, 80 * 165 + 145, "2611000123");
     }
 
     @Test

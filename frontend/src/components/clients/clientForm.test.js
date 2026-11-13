@@ -5,15 +5,11 @@ const personalNumberError = (personalNumber) =>
     validateClient({ ...emptyClient(1), personalNumber }).personalNumber;
 
 describe("validateClient – personal number", () => {
-    it.each(["", "1", "999999"])("accepts %j", (personalNumber) => {
+    it.each(["", "010001", "999999"])("accepts %j, an empty number is given by the server", (personalNumber) => {
         expect(personalNumberError(personalNumber)).toBeUndefined();
     });
 
-    it.each(["0", "000000", "1000000"])("rejects %j, the variable symbol has room for six digits", (personalNumber) => {
-        expect(personalNumberError(personalNumber)).toBe("Osobní číslo musí být mezi 1 a 999999");
-    });
-
-    it("rejects non-digits", () => {
-        expect(personalNumberError("12a")).toBe("Osobní číslo může obsahovat jen číslice");
+    it.each(["1", "12345", "1234567", "12a456"])("rejects %j, the variable symbol has room for exactly six digits", (personalNumber) => {
+        expect(personalNumberError(personalNumber)).toBe("Osobní číslo musí mít 6 číslic");
     });
 });

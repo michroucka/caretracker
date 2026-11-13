@@ -100,9 +100,15 @@ public class TestData {
         return employee;
     }
 
-    /** Client in the caregiver's department and organization. */
+    /** Client in the caregiver's department and organization, with a personal number from the department's range. */
     public Client client(Employee caregiver) {
+        int departmentNumber = departmentRepository.findById(caregiver.getDepartment().getId()).orElseThrow().getDepartmentNumber();
+        return client(caregiver, "%02d%04d".formatted(departmentNumber, next() % 10_000));
+    }
+
+    public Client client(Employee caregiver, String personalNumber) {
         Client client = new Client();
+        client.setPersonalNumber(personalNumber);
         client.setFirstName("Petr");
         client.setLastName("Test " + next());
         client.setGender(Gender.MALE);

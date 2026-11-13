@@ -103,13 +103,13 @@ describe('ClientCreate', () => {
         await enterText(user, field('PSČ'), '301');
         await enterText(user, field('Telefon'), '12345');
         await enterText(user, field('E-mail'), 'marie@seznam');
-        await enterText(user, field('Osobní číslo'), '0');
+        await enterText(user, field('Osobní číslo'), '42');
         await user.click(submitButton());
 
         expect(screen.getByText('PSČ ve tvaru 123 45')).toBeInTheDocument();
         expect(screen.getByText('Telefon ve tvaru 123 456 789 nebo +420 123 456 789')).toBeInTheDocument();
         expect(screen.getByText('Zadejte platnou e-mailovou adresu')).toBeInTheDocument();
-        expect(screen.getByText('Osobní číslo musí být mezi 1 a 999999')).toBeInTheDocument();
+        expect(screen.getByText('Osobní číslo musí mít 6 číslic')).toBeInTheDocument();
         expect(creations).toHaveLength(0);
     });
 
@@ -139,7 +139,7 @@ describe('ClientCreate', () => {
 
         await enterText(user, field('Telefon'), '+420777123456');
         await enterText(user, field('E-mail'), 'marie@example.cz');
-        await enterText(user, field('Osobní číslo'), '42');
+        await enterText(user, field('Osobní číslo'), '010042');
         await user.click(field('Úkony'));
         await user.click(screen.getByRole('option', { name: 'Úklid' }));
         await user.keyboard('{Escape}');
@@ -154,7 +154,7 @@ describe('ClientCreate', () => {
             lastName: 'Nová',
             gender: 'FEMALE',
             dateOfBirth: toIsoDate(firstOfThisMonth()),
-            personalNumber: 42,
+            personalNumber: '010042',
             departmentId: 2,
             caregiverId: 10,
             street: 'Americká 12',

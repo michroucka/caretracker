@@ -46,6 +46,7 @@ class UnauthenticatedAccessIT extends AbstractIntegrationTest {
 
             "GET /api/departments",
             "GET /api/departments/{id}",
+            "GET /api/departments/{id}/next-personal-number",
             "POST /api/departments",
             "PUT /api/departments/{id}",
             "PUT /api/departments/{id}/terminate",

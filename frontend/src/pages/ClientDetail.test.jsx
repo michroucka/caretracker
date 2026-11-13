@@ -16,7 +16,7 @@ const MARIE = {
     lastName: 'Nová',
     gender: 'FEMALE',
     dateOfBirth: '1940-03-15',
-    personalNumber: 1234,
+    personalNumber: '010034',
     legallyCompetent: true,
     street: 'Americká 12',
     city: 'Plzeň',
@@ -89,7 +89,7 @@ describe('ClientDetail – view', () => {
         expect(screen.getByText('Aktivní')).toBeInTheDocument();
         expect(detailValue('Datum narození')).toHaveTextContent('15. 3. 1940 (86 let)');
         expect(detailValue('Pohlaví')).toHaveTextContent('Žena');
-        expect(detailValue('Osobní číslo')).toHaveTextContent('1234');
+        expect(detailValue('Osobní číslo')).toHaveTextContent('010034');
         expect(detailValue('Svéprávný')).toHaveTextContent('Ano');
         expect(detailValue('Adresa')).toHaveTextContent('Americká 1230100 Plzeň');
         expect(screen.getByRole('link', { name: '777123456' })).toHaveAttribute('href', 'tel:777123456');

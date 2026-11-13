@@ -33,10 +33,12 @@ import java.util.*;
 @Service
 public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
 
+    public static final String DUPLICATE_PERSONAL_NUMBER_MESSAGE = "Osobní číslo je už obsazené";
 
-    static final long MAX_PERSONAL_NUMBER = 999_999;
     @Autowired
     private ClientRepository clientRepository;
+    @Autowired
+    private PersonalNumberGenerator personalNumberGenerator;
     @Autowired
     private ClientMapper clientMapper;
     @Autowired
@@ -232,8 +234,8 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     /**
      * Persists a client entity from the supplied DTO, resolving all related entities and validating
      * that they belong to the current user's organization/department.
-     * When no personalNumber is provided, the entity is saved first so the generated ID is available,
-     * then incremented until a unique number within the organization is found.
+     * A new client without a personal number gets the next one of its department ({@link PersonalNumberGenerator}),
+     * an existing client keeps its number unless another one is sent.
      */
     private Client saveClient(Client client, ClientRequestDTO dto) {
         validateRequiredFields(dto);
@@ -270,19 +272,12 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             client.setLongitude(result.map(GeocodingService.GeocodeResult::longitude).orElse(null));
         }
 
-        if (dto.getPersonalNumber() != null) {
-            validatePersonalNumber(dto.getPersonalNumber());
-            client.setPersonalNumber(dto.getPersonalNumber());
+        String requestedPersonalNumber = dto.getPersonalNumber() == null ? "" : dto.getPersonalNumber().trim();
+        if (!requestedPersonalNumber.isEmpty()) {
+            validatePersonalNumber(client, requestedPersonalNumber, department.getOrganization().getId());
+            client.setPersonalNumber(requestedPersonalNumber);
         } else if (client.getPersonalNumber() == null) {
-            // Save first to get the generated ID, then find the next free personal number starting from it.
-            Client savedClient = clientRepository.save(client);
-            Long organizationId = savedClient.getOrganization().getId();
-            Long personalNumber = savedClient.getId();
-            while (clientRepository.existsByPersonalNumberAndOrganizationIdAndActiveTrue(personalNumber, organizationId)) {
-                personalNumber++;
-            }
-            savedClient.setPersonalNumber(personalNumber);
-            return clientRepository.save(savedClient);
+            client.setPersonalNumber(personalNumberGenerator.next(department));
         }
 
         return clientRepository.save(client);
@@ -423,9 +418,15 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     }
 
     /** The payment variable symbol is year, month and the personal number in 10 digits, which leaves six for the number. */
-    private static void validatePersonalNumber(Long personalNumber) {
-        if (personalNumber < 1 || personalNumber > MAX_PERSONAL_NUMBER) {
-            throw new ValidationException("Osobní číslo musí být mezi 1 a " + MAX_PERSONAL_NUMBER);
+    private void validatePersonalNumber(Client client, String personalNumber, Long organizationId) {
+        if (!personalNumber.matches("\\d{6}")) {
+            throw new ValidationException("Osobní číslo musí mít 6 číslic");
+        }
+        boolean taken = client.getId() == null
+                ? clientRepository.existsByPersonalNumberAndOrganizationId(personalNumber, organizationId)
+                : clientRepository.existsByPersonalNumberAndOrganizationIdAndIdNot(personalNumber, organizationId, client.getId());
+        if (taken) {
+            throw new ValidationException(DUPLICATE_PERSONAL_NUMBER_MESSAGE);
         }
     }
 

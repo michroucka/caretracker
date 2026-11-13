@@ -81,8 +81,8 @@ class ClientRequestErrorsTest {
 
     @Test
     void textInNumberFieldNamesTheField() throws Exception {
-        perform(post("/api/clients").contentType(MediaType.APPLICATION_JSON).content("{\"personalNumber\": \"abc\"}"))
-                .andExpect(error(400, "Neplatná hodnota pole 'personalNumber'"));
+        perform(post("/api/clients").contentType(MediaType.APPLICATION_JSON).content("{\"departmentId\": \"abc\"}"))
+                .andExpect(error(400, "Neplatná hodnota pole 'departmentId'"));
     }
 
     @Test

@@ -5,8 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/AuthContext";
+import { ROLES } from "@/constants/roles";
 import { useRecordForm } from "@/hooks/useRecordForm";
 import { useEditingWhileOpen } from "@/hooks/useEditingWhileOpen";
+import { DepartmentAccommodation } from "./DepartmentAccommodation";
 import { DepartmentFields } from "./DepartmentFields";
 import { coordinatorOptions, formatAddress, toFormValues, toRequest, validateDepartment } from "./departmentForm";
 
@@ -14,7 +17,7 @@ function initials(name = "") {
     return name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function DepartmentView({ department }) {
+function DepartmentView({ department, canManageAccommodation }) {
     return (
         <div className="grid gap-6">
             <SheetSection label="Adresa">
@@ -35,6 +38,8 @@ function DepartmentView({ department }) {
                     <p className="text-muted-foreground">Středisko zatím nemá koordinátora.</p>
                 )}
             </SheetSection>
+
+            <DepartmentAccommodation departmentId={department.id} canManage={canManageAccommodation} />
         </div>
     );
 }
@@ -42,6 +47,9 @@ function DepartmentView({ department }) {
 export function DepartmentSheet({ open, onOpenChange, department, isLoading, employees, organizationId, onSave, onTerminate, onActivate }) {
     const [isEditing, setIsEditing] = useEditingWhileOpen(open);
     const form = useRecordForm(toFormValues(department));
+    const { user } = useAuth();
+    const canManageAccommodation = [ROLES.SUPERADMIN, ROLES.ADMIN].includes(user.role)
+        || (user.role === ROLES.COORDINATOR && user.departmentId === department?.id);
 
     const startEditing = () => {
         form.reset(toFormValues(department));
@@ -108,7 +116,7 @@ export function DepartmentSheet({ open, onOpenChange, department, isLoading, emp
                     />
                 </form>
             ) : (
-                <DepartmentView department={department} />
+                <DepartmentView department={department} canManageAccommodation={canManageAccommodation} />
             ))}
         </RecordSheet>
     );

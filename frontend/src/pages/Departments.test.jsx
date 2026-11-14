@@ -29,7 +29,11 @@ const CAREGIVER_MARIE = { id: 42, firstName: 'Marie', lastName: 'Nová', role: '
 function serveDepartments(departments = [PLZEN, KLATOVY]) {
     const departmentRequests = serveAndRecord('get', '/departments', () => HttpResponse.json(departments));
     const employeeRequests = serveAndRecord('get', '/employees', () => HttpResponse.json([COORDINATOR_PETR, CAREGIVER_MARIE]));
-    server.use(http.get(apiUrl('/departments/:id'), ({ params }) => HttpResponse.json(departments.find((item) => item.id === Number(params.id)))));
+    server.use(
+        http.get(apiUrl('/departments/:id'), ({ params }) => HttpResponse.json(departments.find((item) => item.id === Number(params.id)))),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([])),
+    );
     return { departmentRequests, employeeRequests };
 }
 

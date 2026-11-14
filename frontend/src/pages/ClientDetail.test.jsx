@@ -187,15 +187,24 @@ describe('ClientDetail – view', () => {
     });
 
     it('shows dashes for accommodation that was not filled in', async () => {
-        serveClient({ ...MARIE, accommodationType: null, supportedHousing: null, travelDistanceKm: null, hasElevator: false, lockCode: null });
+        serveClient({ ...MARIE, accommodationType: null, supportedHousing: null, travelDistanceKm: null, hasElevator: null, lockCode: null });
 
         renderDetail(caregiver());
 
         await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
         expect(detailValue('Druh ubytování')).toHaveTextContent('–');
         expect(detailValue('Kód od zámku')).toHaveTextContent('–');
-        expect(detailValue('Výtah v domě')).toHaveTextContent('Ne');
+        expect(detailValue('Výtah v domě')).toHaveTextContent('–');
         expect(screen.queryByText('Dům s pečovatelskou službou', { selector: 'dt' })).not.toBeInTheDocument();
+    });
+
+    it('tells a house without an elevator from an unknown one', async () => {
+        serveClient({ ...MARIE, hasElevator: false });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Výtah v domě')).toHaveTextContent('Ne');
     });
 
     it('shows when and why the contract of a terminated client ended', async () => {

@@ -33,7 +33,7 @@ export function toFormValues(client) {
         accommodationType: client?.accommodationType ?? "",
         supportedHousingId: client?.supportedHousing?.id ?? null,
         travelDistanceKm: client?.travelDistanceKm == null ? "" : String(client.travelDistanceKm),
-        hasElevator: client?.hasElevator ?? false,
+        hasElevator: client?.hasElevator ?? null,
         floorOrRoom: client?.floorOrRoom ?? "",
         accessMethod: client?.accessMethod ?? "",
         lockCode: client?.lockCode ?? "",

@@ -290,7 +290,7 @@ describe("api – downloadFile", () => {
         await downloadFile("/clients/7/documents/1", "smlouva.pdf");
 
         expect(click).toHaveBeenCalledOnce();
-        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/file");
+        await vi.waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/file"));
     });
 
     it("throws the server message and saves nothing on an error", async () => {

@@ -228,7 +228,7 @@ describe('Tasks', () => {
             await user.click(within(dialog).getByRole('checkbox', { name: 'Procházka' }));
             await user.click(within(dialog).getByRole('button', { name: 'Načíst vybrané' }));
 
-            expect(await screen.findByText('Načteno 1 úkonů')).toBeInTheDocument();
+            expect(await screen.findByText('Načteno 1 úkon')).toBeInTheDocument();
             expect(imports[0].body).toEqual({ statutoryTaskIds: [3] });
             await waitFor(() => expect(taskRequests.length).toBeGreaterThan(requestsBefore));
             await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Načíst úkony z vyhlášky' })).not.toBeInTheDocument());
@@ -273,7 +273,7 @@ describe('Tasks', () => {
         });
 
         it('shows the official name under the name in the list', async () => {
-            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: 'b2', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
 
             renderTasks(admin());
 
@@ -281,7 +281,7 @@ describe('Tasks', () => {
         });
 
         it('shows the full official name and code in the detail of a renamed linked task', async () => {
-            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně', statutoryMaxUnitPrice: 90 })]);
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: 'b2', statutoryTaskName: 'Pomoc při osobní hygieně', statutoryMaxUnitPrice: 90 })]);
 
             renderTasks(admin(), '/tasks?detail=13');
 
@@ -327,7 +327,7 @@ describe('Tasks', () => {
         });
 
         it('unlinks the task when the link is removed', async () => {
-            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: 'b2', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
             serveStatutoryTasks([WASHING]);
             const updates = serveAndRecord('put', '/tasks/:id', () => HttpResponse.json(task({ id: 13 })));
             const { user } = renderTasks(admin(), '/tasks?detail=13');

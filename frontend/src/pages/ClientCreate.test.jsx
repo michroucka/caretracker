@@ -251,7 +251,7 @@ describe('ClientCreate', () => {
             accommodationType: null,
             supportedHousingId: null,
             travelDistanceKm: null,
-            hasElevator: false,
+            hasElevator: null,
             floorOrRoom: null,
             accessMethod: null,
             lockCode: null,
@@ -426,7 +426,7 @@ describe('ClientCreate', () => {
             await screen.findByRole('button', { name: 'Vytvořit klienta' });
             await fillRequiredFields(user);
             await chooseSupportedHousing(user, 'DPS Slovany');
-            await user.click(field('Výtah v domě'));
+            await chooseOption(user, 'Výtah v domě', 'Ano');
             await enterText(user, field('Patro nebo pokoj'), '2. patro');
             await chooseOption(user, 'Přístup do bytu', 'Klíče');
             await enterText(user, field('Kód od zámku'), '1234');

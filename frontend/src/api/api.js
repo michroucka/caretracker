@@ -278,5 +278,5 @@ export async function downloadFile(endpoint, fileName) {
     link.href = blobUrl;
     link.download = fileName;
     link.click();
-    URL.revokeObjectURL(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
 }

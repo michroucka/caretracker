@@ -66,7 +66,7 @@ describe('accommodation in the request', () => {
     it('turns empty accommodation fields into null and the distance into a number', () => {
         const request = toRequest(toFormValues(null));
 
-        expect(request).toMatchObject({ accommodationType: null, travelDistanceKm: null, floorOrRoom: null, accessMethod: null, lockCode: null, accessNote: null, hasElevator: false });
+        expect(request).toMatchObject({ accommodationType: null, travelDistanceKm: null, floorOrRoom: null, accessMethod: null, lockCode: null, accessNote: null, hasElevator: null });
         expect(toRequest({ ...toFormValues(null), travelDistanceKm: '12' }).travelDistanceKm).toBe(12);
     });
 });

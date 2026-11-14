@@ -136,6 +136,23 @@ describe('DepartmentSheet – supported housings', () => {
         expect(within(closed).queryByRole('button', { name: /Ukončit dům/ })).not.toBeInTheDocument();
     });
 
+    it('rejects an incomplete postal code of a house and limits the length of names', async () => {
+        const creations = serveAndRecord('post', '/departments/:id/supported-housings', () => HttpResponse.json({ id: 9 }));
+        const { user } = renderSheet();
+        await user.click(await screen.findByRole('button', { name: 'Přidat dům' }));
+
+        expect(screen.getByRole('textbox', { name: 'Název domu' })).toHaveAttribute('maxlength', '100');
+        expect(screen.getByRole('textbox', { name: 'Název obce' })).toHaveAttribute('maxlength', '100');
+        await user.type(screen.getByRole('textbox', { name: 'Název domu' }), 'DPS Bory');
+        await user.type(screen.getByRole('textbox', { name: 'Ulice a číslo popisné' }), 'Borská 8');
+        await user.type(screen.getByRole('textbox', { name: 'Město' }), 'Plzeň');
+        await user.type(screen.getByRole('textbox', { name: 'PSČ' }), '3020');
+        await user.click(screen.getByRole('button', { name: 'Uložit dům' }));
+
+        expect(screen.getByText('PSČ ve tvaru 123 45')).toBeInTheDocument();
+        expect(creations).toHaveLength(0);
+    });
+
     it('validates and adds a house', async () => {
         const stored = serveCollections();
         const creations = serveAndRecord('post', '/departments/:id/supported-housings', ({ request }) => request.clone().json().then((body) => {

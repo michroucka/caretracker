@@ -119,7 +119,7 @@ function ClientView({ client, onShowMap, canViewDocuments }) {
                         <DetailItem label="Druh ubytování">{optionName(accommodationTypeOptions, client.accommodationType)}</DetailItem>
                         {client.supportedHousing && <DetailItem label="Dům s pečovatelskou službou">{client.supportedHousing.name}</DetailItem>}
                         <DetailItem label="Patro nebo pokoj">{client.floorOrRoom}</DetailItem>
-                        <DetailItem label="Výtah v domě">{client.hasElevator ? "Ano" : "Ne"}</DetailItem>
+                        <DetailItem label="Výtah v domě">{client.hasElevator == null ? null : client.hasElevator ? "Ano" : "Ne"}</DetailItem>
                         <DetailItem label="Přístup do bytu">{optionName(accessMethodOptions, client.accessMethod)}</DetailItem>
                         <DetailItem label="Kód od zámku">{client.lockCode}</DetailItem>
                         <DetailItem label="Poznámka k přístupu" className="sm:col-span-2">{client.accessNote}</DetailItem>

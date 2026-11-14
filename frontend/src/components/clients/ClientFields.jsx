@@ -29,6 +29,14 @@ function FieldSection({ title, description, children }) {
     );
 }
 
+const elevatorOptions = [
+    { key: "unknown", name: "Neuvedeno" },
+    { key: "true", name: "Ano" },
+    { key: "false", name: "Ne" },
+];
+
+const elevatorKeyOf = (hasElevator) => (hasElevator == null ? "unknown" : String(hasElevator));
+
 function OptionSelect({ controlProps, value, onChange, options, placeholder, disabled }) {
     return (
         <Select value={value} onValueChange={onChange} disabled={disabled}>
@@ -281,10 +289,17 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                 <FormField {...field("accessNote", "Poznámka k přístupu")}>
                     {(controlProps) => <Textarea {...controlProps} rows={2} disabled={disabled} value={values.accessNote} onChange={update("accessNote")} />}
                 </FormField>
-                <div className="flex items-center gap-3">
-                    <Checkbox id={`${idPrefix}-hasElevator`} checked={values.hasElevator} onCheckedChange={(checked) => onChange("hasElevator", checked === true)} disabled={disabled} />
-                    <Label htmlFor={`${idPrefix}-hasElevator`}>Výtah v domě</Label>
-                </div>
+                <FormField {...field("hasElevator", "Výtah v domě")}>
+                    {(controlProps) => (
+                        <OptionSelect
+                            controlProps={controlProps}
+                            value={elevatorKeyOf(values.hasElevator)}
+                            onChange={(key) => onChange("hasElevator", key === "unknown" ? null : key === "true")}
+                            options={elevatorOptions}
+                            disabled={disabled}
+                        />
+                    )}
+                </FormField>
             </FieldSection>
 
             <FieldSection title="Kontakt">

@@ -14,6 +14,9 @@ import { useRecordForm } from "@/hooks/useRecordForm";
 import { showErrorToast } from "@/utils/errorHandler.jsx";
 import { formatPostalCode } from "@/utils/formatters";
 
+const POSTAL_CODE = /^\d{3} \d{2}$/;
+const MAX_NAME_LENGTH = 100;
+
 const EMPTY_HOUSING = { name: "", street: "", city: "", postalCode: "" };
 
 function validateHousing(values) {
@@ -22,6 +25,7 @@ function validateHousing(values) {
     if (!values.street.trim()) errors.street = "Prosím zadejte ulici a číslo popisné";
     if (!values.city.trim()) errors.city = "Prosím zadejte město";
     if (!values.postalCode.trim()) errors.postalCode = "Prosím zadejte PSČ";
+    else if (!POSTAL_CODE.test(values.postalCode)) errors.postalCode = "PSČ ve tvaru 123 45";
     return errors;
 }
 
@@ -87,7 +91,7 @@ function MunicipalitiesSection({ departmentId, canManage }) {
             {canManage && (
                 <form noValidate onSubmit={add} className="flex items-end gap-2">
                     <FormField id="municipality-name" label="Název obce" error={error} className="flex-1">
-                        {(controlProps) => <Input {...controlProps} autoComplete="off" value={name} onChange={(event) => { setName(event.target.value); setError(null); }} />}
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={MAX_NAME_LENGTH} value={name} onChange={(event) => { setName(event.target.value); setError(null); }} />}
                     </FormField>
                     <Button type="submit" variant="outline"><IconPlus /> Přidat obec</Button>
                 </form>
@@ -109,7 +113,7 @@ function HousingForm({ housing, onSubmit, onCancel }) {
     return (
         <form noValidate onSubmit={save} className="grid gap-3 rounded-lg border p-3">
             <FormField {...field("name", "Název domu")}>
-                {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={form.isSubmitting} value={form.values.name} onChange={update("name")} />}
+                {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={MAX_NAME_LENGTH} disabled={form.isSubmitting} value={form.values.name} onChange={update("name")} />}
             </FormField>
             <FormField {...field("street", "Ulice a číslo popisné")}>
                 {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={form.isSubmitting} value={form.values.street} onChange={update("street")} />}

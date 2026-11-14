@@ -9,6 +9,7 @@ import {
     formatDateTime,
     formatTime,
     formatClientName,
+    formatStatutoryCode,
 } from './formatters.js';
 
 const normalizeSpaces = (text) => text.replace(/\s/g, ' ');
@@ -256,5 +257,23 @@ describe('formatClientName', () => {
         expect(formatClientName({ firstName: 'Marie', lastName: 'Nová' })).toBe('Marie Nová');
         expect(formatClientName({ titleBefore: 'Ing.', firstName: 'Marie', lastName: 'Nová', titleAfter: null })).toBe('Ing. Marie Nová');
         expect(formatClientName({ titleBefore: null, firstName: 'Marie', lastName: 'Nová', titleAfter: 'CSc.' })).toBe('Marie Nová, CSc.');
+    });
+});
+
+describe('formatStatutoryCode', () => {
+    test('turns the letter and point into a citation of § 6', () => {
+        expect(formatStatutoryCode('a1')).toBe('§ 6 a) 1.');
+        expect(formatStatutoryCode('h3')).toBe('§ 6 h) 3.');
+        expect(formatStatutoryCode('d10')).toBe('§ 6 d) 10.');
+    });
+
+    test('marks the two variants of the meals', () => {
+        expect(formatStatutoryCode('c1-den')).toBe('§ 6 c) 1. (celodenní)');
+        expect(formatStatutoryCode('c1-obed')).toBe('§ 6 c) 1. (oběd)');
+    });
+
+    test('keeps a code of an unknown shape readable', () => {
+        expect(formatStatutoryCode('xyz')).toBe('xyz');
+        expect(formatStatutoryCode(null)).toBe('');
     });
 });

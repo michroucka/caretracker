@@ -3,6 +3,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatStatutoryCode } from "@/utils/formatters";
 import { statutoryPrefill, UNIT_TYPES } from "./taskForm";
 
 const NO_STATUTORY_TASK = "none";
@@ -24,7 +25,7 @@ export function TaskFields({ idPrefix, values, errors, onChange, disabled, shake
                             <SelectTrigger {...controlProps} className="w-full"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value={NO_STATUTORY_TASK}>Bez vazby na vyhlášku</SelectItem>
-                                {statutoryTasks.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} {item.shortName}</SelectItem>)}
+                                {statutoryTasks.map((item) => <SelectItem key={item.id} value={String(item.id)}>{formatStatutoryCode(item.code)} {item.shortName}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     )}

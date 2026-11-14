@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useRecordForm } from "@/hooks/useRecordForm";
+import { formatStatutoryCode } from "@/utils/formatters";
 import { TaskFields } from "./TaskFields";
 import { formatTaskPrice, toFormValues, toRequest, unitTypeLabel, validateTask } from "./taskForm";
 
@@ -18,7 +19,7 @@ function TaskView({ task }) {
             {task.statutoryTaskId != null && (
                 <SheetSection label="Úkon podle vyhlášky">
                     <div className="grid gap-0.5">
-                        <p className="font-medium">{task.statutoryTaskCode}</p>
+                        <p className="font-medium">{formatStatutoryCode(task.statutoryTaskCode)}</p>
                         <p className="text-sm text-muted-foreground">{task.statutoryTaskName}</p>
                     </div>
                 </SheetSection>

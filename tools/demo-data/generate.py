@@ -660,9 +660,10 @@ def build_plans(clients):
         gender = client["gender"]
         plan_id = len(plans) + 1
         versions = 1 if client["care_days_ago"] < 200 else rng.choice([1, 2, 2, 3])
-        first_processed = -client["care_days_ago"] + 30
-        processed_dates = sorted({min(-3, first_processed + step * rng.randint(170, 190)) for step in range(versions)})
-        processed_dates = [d for d in processed_dates if d <= -3] or [-3]
+        # the current version is from the last half year, older ones every half year before it, never before the care
+        first_allowed = -client["care_days_ago"] + 30
+        latest = max(-rng.randint(10, 170), min(-3, first_allowed))
+        processed_dates = sorted({latest} | {latest - 182 * step for step in range(1, versions) if latest - 182 * step >= first_allowed})
         widowed = rng.random() < 0.6
         life_path = (g(gender, "Narodila se", "Narodil se") + f" v roce {client['date_of_birth'].year}, celý život "
                      + g(gender, "pracovala jako ", "pracoval jako ") + rng.choice(g(gender, JOBS_F, JOBS_M)) + ". "
@@ -670,7 +671,8 @@ def build_plans(clients):
                      + (g(gender, f"Ovdověla před {rng.randint(2, 25)} lety.", f"Ovdověl před {rng.randint(2, 25)} lety.") if widowed
                         else g(gender, "Žije s manželem.", "Žije s manželkou.")))
         base = {
-            "likes": ", ".join(rng.sample(LIKES + g(gender, LIKES_F, LIKES_M), 2)),
+            "likes": "{}, {}".format(*(like if i == 0 else like[0].lower() + like[1:]
+                                       for i, like in enumerate(rng.sample(LIKES + g(gender, LIKES_F, LIKES_M), 2)))),
             "dislikes": rng.choice(DISLIKES + [g(gender, *pair) for pair in DISLIKES_GENDERED]),
             "strengths": g(gender, *rng.choice(STRENGTHS)),
             "aspirations": g(gender, *rng.choice(ASPIRATIONS)),

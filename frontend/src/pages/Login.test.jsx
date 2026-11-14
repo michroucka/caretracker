@@ -140,6 +140,29 @@ describe('Login', () => {
         expect(await screen.findByText('Server není dostupný')).toBeInTheDocument();
     });
 
+    describe('demo build', () => {
+        const DEMO_NOTE = 'Demo obsahuje smyšlené osoby, fotografie jsou vygenerované AI.';
+
+        afterEach(() => vi.unstubAllEnvs());
+
+        it('offers the demo accounts and says the people and photos are not real', async () => {
+            vi.stubEnv('VITE_DEMO_MODE', 'true');
+            const { user } = renderApp({ route: '/login' });
+
+            expect(await screen.findByText(DEMO_NOTE)).toBeInTheDocument();
+            await user.click(screen.getByRole('button', { name: /coordinator/ }));
+            expect(screen.getByLabelText('Uživatelské jméno')).toHaveValue('coordinator');
+        });
+
+        it('shows neither outside the demo', async () => {
+            vi.stubEnv('VITE_DEMO_MODE', 'false');
+            renderApp({ route: '/login' });
+
+            await screen.findByRole('heading', { name: 'Přihlášení' });
+            expect(screen.queryByText(DEMO_NOTE)).not.toBeInTheDocument();
+        });
+    });
+
     it('sends a logged-in user away from the login page', async () => {
         serveCaregiverHome();
         renderApp({ authStatus: loggedInCaregiver, route: '/login' });

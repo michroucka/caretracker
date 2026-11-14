@@ -53,6 +53,7 @@ function DemoAccounts({ onPick, disabled }) {
             <p className="border-t pt-3 text-xs text-muted-foreground">
                 Kliknutím na účet se vyplní přihlášení. Heslo u všech účtů: <span className="font-mono text-foreground">{DEMO_PASSWORD}</span>
             </p>
+            <p className="text-xs text-muted-foreground">Demo obsahuje smyšlené osoby, fotografie jsou vygenerované AI.</p>
         </section>
     );
 }

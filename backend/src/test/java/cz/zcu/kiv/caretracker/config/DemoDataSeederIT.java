@@ -86,6 +86,14 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM client")).isEqualTo(clients);
         assertThat(count("SELECT COUNT(*) FROM performed_task")).isEqualTo(performedTasks);
         assertThat(count("SELECT COUNT(*) FROM picture")).isEqualTo(2);
+
+        // a restart that interrupted the first seeding leaves the data without any performed task
+        jdbcTemplate.execute("DELETE FROM caregiver_performed_task; DELETE FROM performed_task");
+
+        assertThat(seeder.seedIfEmpty()).isFalse();
+
+        assertThat(count("SELECT COUNT(*) FROM client")).isEqualTo(clients);
+        assertThat(count("SELECT COUNT(*) FROM performed_task")).isEqualTo(performedTasks);
     }
 
     private long count(String query) {

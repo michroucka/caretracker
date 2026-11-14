@@ -42,14 +42,24 @@ public class DemoDataSeeder {
         this.portraitsLocation = portraitsLocation;
     }
 
-    /** Seeds only a database without any organization, so a restart never duplicates the data. */
+    /**
+     * Seeds only a database without any organization, so a restart never duplicates the data. A database
+     * that has the data but no performed tasks (a restart interrupted the first seeding) gets the activity.
+     */
     public boolean seedIfEmpty() {
-        Long organizations = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM organization", Long.class);
-        if (organizations != null && organizations > 0) {
+        if (count("organization") > 0) {
+            if (count("performed_task") == 0) {
+                seedActivity();
+            }
             return false;
         }
         seed();
         return true;
+    }
+
+    private long count(String table) {
+        Long rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+        return rows == null ? 0 : rows;
     }
 
     public void seed() {

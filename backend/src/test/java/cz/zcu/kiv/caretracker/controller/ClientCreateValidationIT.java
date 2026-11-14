@@ -1,5 +1,6 @@
 package cz.zcu.kiv.caretracker.controller;
 
+import cz.zcu.kiv.caretracker.entity.Client;
 import cz.zcu.kiv.caretracker.entity.Department;
 import cz.zcu.kiv.caretracker.entity.Employee;
 import cz.zcu.kiv.caretracker.enums.EmployeeRole;
@@ -16,7 +17,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import com.jayway.jsonpath.JsonPath;
+
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the request is rejected with 400, nothing is stored and the message does not name Java classes.
  */
 class ClientCreateValidationIT extends AbstractIntegrationTest {
+
+    private static final String GUARDIAN_REQUIRED = "U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka";
 
     @Autowired
     private ClientRepository clientRepository;
@@ -75,6 +82,118 @@ class ClientCreateValidationIT extends AbstractIntegrationTest {
         createClient(validRequestWith("departmentId", null))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Prosím vyberte středisko"));
+    }
+
+    @Test
+    void incompetentClientWithoutGuardianNameIsRejected() throws Exception {
+        Map<String, Object> request = validRequestWith("legallyCompetent", false);
+        request.put("guardianContact", "+420 777 111 222");
+
+        createClient(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(GUARDIAN_REQUIRED));
+    }
+
+    @Test
+    void incompetentClientWithoutGuardianContactIsRejected() throws Exception {
+        Map<String, Object> request = validRequestWith("legallyCompetent", false);
+        request.put("guardianName", "Jana Nová");
+        request.put("guardianContact", "  ");
+
+        createClient(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(GUARDIAN_REQUIRED));
+    }
+
+    @Test
+    void updatingOldIncompetentClientWithoutGuardianIsRejected() throws Exception {
+        Client oldClient = testData.client(caregiver);
+        oldClient.setLegallyCompetent(false);
+        clientRepository.save(oldClient);
+
+        mockMvc.perform(put("/api/clients/{id}", oldClient.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(validRequestWith("legallyCompetent", false)))
+                        .with(loggedInAs(coordinator)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(GUARDIAN_REQUIRED));
+    }
+
+    @Test
+    void definiteContractWithoutEndIsRejected() throws Exception {
+        Map<String, Object> request = validRequestWith("contractIndefinite", false);
+        request.put("contractFrom", "2026-01-01");
+
+        createClient(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("U smlouvy na dobu určitou vyplňte datum konce"));
+    }
+
+    @Test
+    void contractEndingBeforeItStartsIsRejected() throws Exception {
+        Map<String, Object> request = validRequestWith("contractFrom", "2026-05-01");
+        request.put("contractTo", "2026-04-30");
+
+        createClient(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Konec smlouvy nesmí být před jejím začátkem"));
+    }
+
+    @Test
+    void careEndingBeforeItStartsIsRejected() throws Exception {
+        Map<String, Object> request = validRequestWith("careFrom", "2026-05-01");
+        request.put("careTo", "2026-04-30");
+
+        createClient(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Konec péče nesmí být před jejím začátkem"));
+    }
+
+    @Test
+    void additionalDetailsAreStoredAndReturned() throws Exception {
+        Map<String, Object> request = validRequestWith("legallyCompetent", false);
+        request.put("titleBefore", "Ing.");
+        request.put("titleAfter", "CSc.");
+        request.put("phone2", "+420 777 000 111");
+        request.put("guardianName", "Jana Nová");
+        request.put("guardianContact", "jana@example.com, +420 777 111 222");
+        request.put("careFrom", "2026-01-01");
+        request.put("careTo", "2026-12-31");
+        request.put("contractFrom", "2026-01-01");
+        request.put("contractIndefinite", false);
+        request.put("contractTo", "2026-06-30");
+        request.put("noCharge", true);
+        request.put("intakeAssessmentDate", "2025-12-15");
+
+        String response = createClient(request).andExpect(status().is2xxSuccessful())
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(response, "$.id")).longValue();
+
+        mockMvc.perform(get("/api/clients/{id}", id).with(loggedInAs(coordinator)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titleBefore").value("Ing."))
+                .andExpect(jsonPath("$.titleAfter").value("CSc."))
+                .andExpect(jsonPath("$.phone2").value("+420 777 000 111"))
+                .andExpect(jsonPath("$.guardianName").value("Jana Nová"))
+                .andExpect(jsonPath("$.guardianContact").value("jana@example.com, +420 777 111 222"))
+                .andExpect(jsonPath("$.careFrom").value("2026-01-01"))
+                .andExpect(jsonPath("$.careTo").value("2026-12-31"))
+                .andExpect(jsonPath("$.contractFrom").value("2026-01-01"))
+                .andExpect(jsonPath("$.contractTo").value("2026-06-30"))
+                .andExpect(jsonPath("$.contractIndefinite").value(false))
+                .andExpect(jsonPath("$.noCharge").value(true))
+                .andExpect(jsonPath("$.intakeAssessmentDate").value("2025-12-15"));
+    }
+
+    @Test
+    void requestWithoutAdditionalDetailsUsesDefaults() throws Exception {
+        String response = createClient(validRequestWith("firstName", "Marie")).andExpect(status().is2xxSuccessful())
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(response, "$.id")).longValue();
+
+        mockMvc.perform(get("/api/clients/{id}", id).with(loggedInAs(coordinator)))
+                .andExpect(jsonPath("$.contractIndefinite").value(true))
+                .andExpect(jsonPath("$.noCharge").value(false))
+                .andExpect(jsonPath("$.guardianName").doesNotExist());
     }
 
     private ResultActions createClient(Map<String, Object> request) throws Exception {

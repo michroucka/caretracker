@@ -113,6 +113,42 @@ public class Client {
     @Column(name = "access_note", columnDefinition = "TEXT")
     private String accessNote;
 
+    @Column(name = "title_before", length = 20)
+    private String titleBefore;
+
+    @Column(name = "title_after", length = 20)
+    private String titleAfter;
+
+    @Column(length = 16)
+    private String phone2;
+
+    @Column(name = "guardian_name")
+    private String guardianName;
+
+    @Column(name = "guardian_contact", columnDefinition = "TEXT")
+    private String guardianContact;
+
+    @Column(name = "care_from")
+    private LocalDate careFrom;
+
+    @Column(name = "care_to")
+    private LocalDate careTo;
+
+    @Column(name = "contract_from")
+    private LocalDate contractFrom;
+
+    @Column(name = "contract_to")
+    private LocalDate contractTo;
+
+    @Column(name = "contract_indefinite")
+    private Boolean contractIndefinite = Boolean.TRUE;
+
+    @Column(name = "no_charge", nullable = false)
+    private Boolean noCharge = Boolean.FALSE;
+
+    @Column(name = "intake_assessment_date")
+    private LocalDate intakeAssessmentDate;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supported_housing_id")
     private SupportedHousing supportedHousing;

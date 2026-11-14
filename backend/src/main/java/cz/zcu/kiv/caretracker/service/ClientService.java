@@ -440,6 +440,24 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         requireText(dto.getPostalCode(), "Prosím zadejte PSČ");
         require(dto.getLegallyCompetent(), "Prosím uveďte svéprávnost");
         requireText(dto.getBenefits(), "Prosím vyberte stupeň příspěvku");
+        if (!dto.getLegallyCompetent() && (isBlank(dto.getGuardianName()) || isBlank(dto.getGuardianContact()))) {
+            throw new ValidationException("U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka");
+        }
+        if (Boolean.FALSE.equals(dto.getContractIndefinite()) && dto.getContractTo() == null) {
+            throw new ValidationException("U smlouvy na dobu určitou vyplňte datum konce");
+        }
+        requireNotBefore(dto.getContractTo(), dto.getContractFrom(), "Konec smlouvy nesmí být před jejím začátkem");
+        requireNotBefore(dto.getCareTo(), dto.getCareFrom(), "Konec péče nesmí být před jejím začátkem");
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static void requireNotBefore(LocalDate end, LocalDate start, String message) {
+        if (end != null && start != null && end.isBefore(start)) {
+            throw new ValidationException(message);
+        }
     }
 
     private static void require(Object value, String message) {

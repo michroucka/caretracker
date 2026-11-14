@@ -38,5 +38,16 @@ public class ClientRequestDTO {
     private String accessMethod;
     private String lockCode;
     private String accessNote;
+    private String titleBefore;
+    private String titleAfter;
+    private String phone2;
+    private String guardianName;
+    private String guardianContact;
+    private LocalDate careFrom;
+    private LocalDate careTo;
+    private LocalDate contractFrom;
+    private LocalDate contractTo;
+    private Boolean contractIndefinite;
+    private Boolean noCharge;
+    private LocalDate intakeAssessmentDate;
 }
-

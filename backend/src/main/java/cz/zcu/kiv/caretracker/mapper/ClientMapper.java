@@ -78,6 +78,19 @@ public class ClientMapper {
         dto.setLockCode(client.getLockCode());
         dto.setAccessNote(client.getAccessNote());
 
+        dto.setTitleBefore(client.getTitleBefore());
+        dto.setTitleAfter(client.getTitleAfter());
+        dto.setPhone2(client.getPhone2());
+        dto.setGuardianName(client.getGuardianName());
+        dto.setGuardianContact(client.getGuardianContact());
+        dto.setCareFrom(client.getCareFrom());
+        dto.setCareTo(client.getCareTo());
+        dto.setContractFrom(client.getContractFrom());
+        dto.setContractTo(client.getContractTo());
+        dto.setContractIndefinite(client.getContractIndefinite());
+        dto.setNoCharge(client.getNoCharge());
+        dto.setIntakeAssessmentDate(client.getIntakeAssessmentDate());
+
         return dto;
     }
 
@@ -183,6 +196,18 @@ public class ClientMapper {
         client.setAccessMethod(dto.getAccessMethod() != null ? AccessMethod.valueOf(dto.getAccessMethod()) : null);
         client.setLockCode(dto.getLockCode());
         client.setAccessNote(dto.getAccessNote());
+        client.setTitleBefore(dto.getTitleBefore());
+        client.setTitleAfter(dto.getTitleAfter());
+        client.setPhone2(dto.getPhone2());
+        client.setGuardianName(dto.getGuardianName());
+        client.setGuardianContact(dto.getGuardianContact());
+        client.setCareFrom(dto.getCareFrom());
+        client.setCareTo(dto.getCareTo());
+        client.setContractFrom(dto.getContractFrom());
+        client.setContractTo(dto.getContractTo());
+        client.setContractIndefinite(dto.getContractIndefinite() != null ? dto.getContractIndefinite() : Boolean.TRUE);
+        client.setNoCharge(dto.getNoCharge() != null ? dto.getNoCharge() : Boolean.FALSE);
+        client.setIntakeAssessmentDate(dto.getIntakeAssessmentDate());
     }
 
     /** Maps a list of {@link Client} entities to a list of {@link ClientDTO}s. */

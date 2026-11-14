@@ -1,5 +1,5 @@
 import React from "react";
-import { IconDownload, IconTrash, IconUpload } from "@tabler/icons-react";
+import { IconDownload, IconFileTypePdf, IconPhoto, IconTrash, IconUpload } from "@tabler/icons-react";
 import { useClientDocuments } from "@/hooks/useClientDocuments";
 import { documentTypeOptions } from "@/constants/clientConstants";
 import { formatDate } from "@/utils/formatters";
@@ -46,10 +46,13 @@ export function ClientDocuments({ clientId, canModify }) {
         <div className="grid gap-4">
             {!loading && documents.length === 0 && <p className="text-muted-foreground">Klient zatím nemá žádné dokumenty.</p>}
             {documents.length > 0 && (
-                <ul className="grid gap-3">
+                <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {documents.map((document) => (
-                        <li key={document.id} className="flex items-center justify-between gap-3">
-                            <div className="grid min-w-0">
+                        <li key={document.id} className="flex items-center gap-3 rounded-lg border p-3">
+                            {document.contentType === "application/pdf"
+                                ? <IconFileTypePdf className="size-8 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                : <IconPhoto className="size-8 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                            <div className="grid min-w-0 flex-1">
                                 <span className="truncate font-medium">{document.fileName}</span>
                                 <span className="text-sm text-muted-foreground">
                                     {[typeName(document.type), formatDate(document.uploadedAt), document.uploadedByName].filter(Boolean).join(" · ")}

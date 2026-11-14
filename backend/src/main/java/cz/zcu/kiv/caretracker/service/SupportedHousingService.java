@@ -15,15 +15,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 public class SupportedHousingService extends BaseRoleFilteringService<SupportedHousing, SupportedHousingDTO> {
+    private static final Pattern POSTAL_CODE = Pattern.compile("\\d{3} \\d{2}");
+
     @Autowired
     private DepartmentRepository departmentRepository;
     @Autowired
     private SupportedHousingRepository supportedHousingRepository;
     @Autowired
     private ClientRepository clientRepository;
+    @Autowired
+    private GeocodingService geocodingService;
 
     @Transactional(readOnly = true)
     public List<SupportedHousingDTO> getSupportedHousings(Long departmentId) {
@@ -51,14 +58,34 @@ public class SupportedHousingService extends BaseRoleFilteringService<SupportedH
         findEditableDepartment(departmentId);
         SupportedHousing housing = findHousing(departmentId, housingId);
 
+        List<String> previousAddress = addressOf(housing);
+
         applyRequest(housing, dto);
-        for (Client client : clientRepository.findBySupportedHousingId(housingId)) {
-            client.setStreet(housing.getStreet());
-            client.setCity(housing.getCity());
-            client.setPostalCode(housing.getPostalCode());
+        boolean addressChanged = !previousAddress.equals(addressOf(housing));
+        if (addressChanged) {
+            moveClientsToHousingAddress(housing);
         }
 
         return toDTO(supportedHousingRepository.save(housing));
+    }
+
+    private static List<String> addressOf(SupportedHousing housing) {
+        return Arrays.asList(housing.getStreet(), housing.getCity(), housing.getPostalCode());
+    }
+
+    private void moveClientsToHousingAddress(SupportedHousing housing) {
+        List<Client> clients = clientRepository.findBySupportedHousingId(housing.getId());
+        if (clients.isEmpty()) {
+            return;
+        }
+        Optional<GeocodingService.GeocodeResult> position = geocodingService.geocode(housing.getStreet(), housing.getCity(), housing.getPostalCode());
+        for (Client client : clients) {
+            client.setStreet(housing.getStreet());
+            client.setCity(housing.getCity());
+            client.setPostalCode(housing.getPostalCode());
+            client.setLatitude(position.map(GeocodingService.GeocodeResult::latitude).orElse(null));
+            client.setLongitude(position.map(GeocodingService.GeocodeResult::longitude).orElse(null));
+        }
     }
 
     public SupportedHousingDTO terminateSupportedHousing(Long departmentId, Long housingId) {
@@ -73,7 +100,11 @@ public class SupportedHousingService extends BaseRoleFilteringService<SupportedH
         housing.setName(requireText(dto.getName(), "Prosím zadejte název domu"));
         housing.setStreet(requireText(dto.getStreet(), "Prosím zadejte ulici a číslo popisné"));
         housing.setCity(requireText(dto.getCity(), "Prosím zadejte město"));
-        housing.setPostalCode(requireText(dto.getPostalCode(), "Prosím zadejte PSČ"));
+        String postalCode = requireText(dto.getPostalCode(), "Prosím zadejte PSČ");
+        if (!POSTAL_CODE.matcher(postalCode).matches()) {
+            throw new ValidationException("PSČ ve tvaru 123 45");
+        }
+        housing.setPostalCode(postalCode);
     }
 
     private static String requireText(String value, String message) {

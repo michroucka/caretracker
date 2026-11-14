@@ -5,6 +5,7 @@ import cz.zcu.kiv.caretracker.entity.Department;
 import cz.zcu.kiv.caretracker.entity.Employee;
 import cz.zcu.kiv.caretracker.entity.Organization;
 import cz.zcu.kiv.caretracker.enums.EmployeeRole;
+import cz.zcu.kiv.caretracker.service.GeocodingService;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,10 +14,12 @@ import org.springframework.http.MediaType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -227,6 +230,36 @@ class AccommodationIT extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/clients/{id}", clientId).with(loggedInAs(coordinator)))
                 .andExpect(jsonPath("$.street").value("Žatecká 12"));
+    }
+
+    @Test
+    void changedAddressOfHouseMovesCoordinatesOfItsClients() throws Exception {
+        long housing = createSupportedHousing(department, "DPS Kralovice");
+        Map<String, Object> request = clientRequest("SUPPORTED_HOUSING");
+        request.put("supportedHousingId", housing);
+        long clientId = createClient(request);
+        when(geocodingService.geocode("Žatecká 12", "Kralovice", "331 41"))
+                .thenReturn(Optional.of(new GeocodingService.GeocodeResult(50.1, 13.5)));
+
+        mockMvc.perform(put("/api/departments/{id}/supported-housings/{housingId}", department.getId(), housing)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(housingRequest("DPS Kralovice", "Žatecká 12")))
+                        .with(loggedInAs(admin)))
+                .andExpect(status().is2xxSuccessful());
+
+        mockMvc.perform(get("/api/clients/{id}", clientId).with(loggedInAs(coordinator)))
+                .andExpect(jsonPath("$.latitude").value(50.1))
+                .andExpect(jsonPath("$.longitude").value(13.5));
+    }
+
+    @Test
+    void housePostalCodeInWrongFormatIsRejected() throws Exception {
+        mockMvc.perform(post("/api/departments/{id}/supported-housings", department.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("name", "DPS", "street", "Ulice 1", "city", "Kralovice", "postalCode", "12345")))
+                        .with(loggedInAs(admin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("PSČ ve tvaru 123 45"));
     }
 
     @Test

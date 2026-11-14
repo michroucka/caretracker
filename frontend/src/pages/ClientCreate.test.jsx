@@ -12,6 +12,10 @@ import { toIsoDate } from '@/lib/dates';
 const PLZEN = { id: 2, city: 'Plzeň' };
 const KLATOVY = { id: 3, city: 'Klatovy' };
 
+const SLOVANY = { id: 5, name: 'DPS Slovany', street: 'Slovanská 3', city: 'Plzeň', postalCode: '30100', active: true };
+const BORY = { id: 6, name: 'DPS Bory', street: 'Borská 8', city: 'Plzeň', postalCode: '30200', active: true };
+const CLOSED_HOUSE = { id: 7, name: 'DPS Zavřený', street: 'Stará 1', city: 'Plzeň', postalCode: '30100', active: false };
+
 const NEXT_PERSONAL_NUMBERS = { [PLZEN.id]: '020043', [KLATOVY.id]: '030007' };
 
 const firstOfThisMonth = () => {
@@ -29,6 +33,8 @@ function serveFormOptions() {
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
         http.get(apiUrl('/departments/:id/next-personal-number'), ({ params }) =>
             HttpResponse.json({ personalNumber: NEXT_PERSONAL_NUMBERS[params.id] })),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([{ id: 1, name: 'Dobřany' }, { id: 2, name: 'Plzeň' }])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([SLOVANY, BORY, CLOSED_HOUSE])),
     );
 }
 
@@ -65,6 +71,22 @@ async function enterText(user, element, text) {
     await user.paste(text);
 }
 
+async function enterCity(user, city) {
+    await user.click(field('Město'));
+    await user.type(screen.getByPlaceholderText('Hledat obec…'), city);
+    await user.click(screen.getByRole('option', { name: new RegExp(city) }));
+}
+
+async function chooseOption(user, label, optionName) {
+    await user.click(field(label));
+    await user.click(screen.getByRole('option', { name: optionName }));
+}
+
+const chooseSupportedHousing = async (user, name) => {
+    await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+    await chooseOption(user, 'Dům s pečovatelskou službou', name);
+};
+
 async function fillRequiredFields(user) {
     await enterText(user, field('Jméno'), ' Marie ');
     await enterText(user, field('Příjmení'), 'Nová');
@@ -74,7 +96,7 @@ async function fillRequiredFields(user) {
     await user.click(field('Klíčový pracovník'));
     await user.click(screen.getByRole('option', { name: 'Jana Testová' }));
     await enterText(user, field('Ulice a číslo popisné'), 'Americká 12');
-    await enterText(user, field('Město'), 'Plzeň');
+    await enterCity(user, 'Plzeň');
     await enterText(user, field('PSČ'), '30100');
 }
 
@@ -226,6 +248,14 @@ describe('ClientCreate', () => {
             street: 'Americká 12',
             city: 'Plzeň',
             postalCode: '301 00',
+            accommodationType: null,
+            supportedHousingId: null,
+            travelDistanceKm: null,
+            hasElevator: false,
+            floorOrRoom: null,
+            accessMethod: null,
+            lockCode: null,
+            accessNote: null,
             email: 'marie@example.cz',
             phone: '+420 777 123 456',
             legallyCompetent: true,
@@ -252,5 +282,135 @@ describe('ClientCreate', () => {
         expect(window.location.pathname).toBe('/clients/new');
         await waitFor(() => expect(submitButton()).toBeEnabled());
         expect(field('Jméno')).toHaveValue(' Marie ');
+    });
+
+    describe('accommodation', () => {
+        it('offers the municipalities of the department and accepts a city that is not among them', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await user.click(field('Město'));
+            expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Dobřany', 'Plzeň']);
+
+            await user.type(screen.getByPlaceholderText('Hledat obec…'), 'Nepomuk');
+            await user.click(screen.getByRole('option', { name: /Nepomuk/ }));
+
+            expect(field('Město')).toHaveTextContent('Nepomuk');
+        });
+
+        it('loads the municipalities of a newly chosen department', async () => {
+            const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/municipalities'), ({ params }) =>
+                HttpResponse.json(Number(params.id) === KLATOVY.id ? [{ id: 9, name: 'Janovice' }] : [{ id: 1, name: 'Dobřany' }])));
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await chooseDepartment(user, 'Klatovy');
+            await user.click(field('Město'));
+
+            expect(await screen.findByRole('option', { name: 'Janovice' })).toBeInTheDocument();
+            expect(screen.queryByRole('option', { name: 'Dobřany' })).not.toBeInTheDocument();
+        });
+
+        it('offers only active supported housings, and only for the supported housing type', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            expect(screen.queryByLabelText(/^Dům s pečovatelskou službou/)).not.toBeInTheDocument();
+
+            await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+            await user.click(field('Dům s pečovatelskou službou'));
+
+            await waitFor(() => expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['DPS Slovany', 'DPS Bory']));
+        });
+
+        it('fills the address from the chosen house and locks it', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            expect(field('Ulice a číslo popisné')).toHaveValue('Slovanská 3');
+            expect(field('Město')).toHaveValue('Plzeň');
+            expect(field('PSČ')).toHaveValue('301 00');
+            for (const label of ['Ulice a číslo popisné', 'Město', 'PSČ']) expect(field(label)).toHaveAttribute('readonly');
+
+            await chooseOption(user, 'Dům s pečovatelskou službou', 'DPS Bory');
+            expect(field('Ulice a číslo popisné')).toHaveValue('Borská 8');
+        });
+
+        it('unlocks the address and keeps its values when the type changes from supported housing', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            await chooseOption(user, 'Druh ubytování', 'Nájemní byt');
+
+            expect(field('Ulice a číslo popisné')).not.toHaveAttribute('readonly');
+            expect(field('Ulice a číslo popisné')).toHaveValue('Slovanská 3');
+            expect(screen.queryByLabelText(/^Dům s pečovatelskou službou/)).not.toBeInTheDocument();
+            expect(field('Město')).toHaveTextContent('Plzeň');
+        });
+
+        it('requires a house for supported housing, but not the address', async () => {
+            const creations = serveAndRecord('post', '/clients');
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+
+            await user.click(submitButton());
+
+            expect(screen.getByText('Vyberte dům s pečovatelskou službou')).toBeInTheDocument();
+            expect(screen.queryByText('Prosím zadejte ulici a číslo popisné')).not.toBeInTheDocument();
+            expect(creations).toHaveLength(0);
+        });
+
+        it('forgets the chosen house when the department changes', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            await chooseDepartment(user, 'Klatovy');
+
+            expect(field('Dům s pečovatelskou službou')).toHaveTextContent('Vyberte dům');
+        });
+
+        it('sends the accommodation fields', async () => {
+            const creations = serveAndRecord('post', '/clients', () => HttpResponse.json({ id: 55 }));
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await fillRequiredFields(user);
+            await chooseSupportedHousing(user, 'DPS Slovany');
+            await user.click(field('Výtah v domě'));
+            await enterText(user, field('Patro nebo pokoj'), '2. patro');
+            await chooseOption(user, 'Přístup do bytu', 'Klíče');
+            await enterText(user, field('Kód od zámku'), '1234');
+            await enterText(user, field('Dojezdová vzdálenost'), '12');
+
+            await user.click(submitButton());
+
+            await waitFor(() => expect(creations).toHaveLength(1));
+            expect(creations[0].body).toMatchObject({
+                accommodationType: 'SUPPORTED_HOUSING',
+                supportedHousingId: 5,
+                street: 'Slovanská 3',
+                postalCode: '301 00',
+                hasElevator: true,
+                floorOrRoom: '2. patro',
+                accessMethod: 'KEYS',
+                lockCode: '1234',
+                travelDistanceKm: 12,
+            });
+        });
+
+        it('rejects a negative travel distance', async () => {
+            const creations = serveAndRecord('post', '/clients');
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await fillRequiredFields(user);
+            await enterText(user, field('Dojezdová vzdálenost'), '-3');
+
+            await user.click(submitButton());
+
+            expect(screen.getByText('Dojezdová vzdálenost nesmí být záporná')).toBeInTheDocument();
+            expect(creations).toHaveLength(0);
+        });
     });
 });

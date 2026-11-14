@@ -39,6 +39,17 @@ const MARIE = {
     terminationReason: null,
 };
 
+const ACCOMMODATION = {
+    accommodationType: 'SUPPORTED_HOUSING',
+    supportedHousing: { id: 5, name: 'DPS Slovany' },
+    travelDistanceKm: 12,
+    hasElevator: true,
+    floorOrRoom: '2. patro',
+    accessMethod: 'KEYS',
+    lockCode: '4821',
+    accessNote: 'Klíče u vrátného',
+};
+
 const TERMINATED_MARIE = { ...MARIE, active: false, terminationDate: '2026-10-31', terminationReason: 'EXITUS' };
 
 /** Serves the client from a variable, so a reload after an action shows what the server changed. */
@@ -49,6 +60,10 @@ function serveClient(initialClient) {
         http.get(apiUrl('/departments'), () => HttpResponse.json([PLZEN])),
         http.get(apiUrl('/employees'), () => HttpResponse.json([{ id: 10, firstName: 'Jana', lastName: 'Testová', department: PLZEN }])),
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([{ id: 1, name: 'Plzeň' }])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([
+            { id: 5, name: 'DPS Slovany', street: 'Americká 12', city: 'Plzeň', postalCode: '30100', active: true },
+        ])),
     );
     const listReloads = serveAndRecord('get', '/clients', () => HttpResponse.json([]));
     return { listReloads, changeTo: (client) => { storedClient = client; } };
@@ -103,6 +118,34 @@ describe('ClientDetail – view', () => {
         expect(screen.getByText('2 úkony')).toBeInTheDocument();
         expect(screen.getByText('Úklid')).toBeInTheDocument();
         expect(screen.queryByText('Ukončení smlouvy')).not.toBeInTheDocument();
+    });
+
+    it('shows the accommodation including the lock code', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Druh ubytování')).toHaveTextContent('Dům s pečovatelskou službou (DPS)');
+        expect(detailValue('Dům s pečovatelskou službou')).toHaveTextContent('DPS Slovany');
+        expect(detailValue('Patro nebo pokoj')).toHaveTextContent('2. patro');
+        expect(detailValue('Výtah v domě')).toHaveTextContent('Ano');
+        expect(detailValue('Přístup do bytu')).toHaveTextContent('Klíče');
+        expect(detailValue('Kód od zámku')).toHaveTextContent('4821');
+        expect(detailValue('Poznámka k přístupu')).toHaveTextContent('Klíče u vrátného');
+        expect(detailValue('Dojezdová vzdálenost')).toHaveTextContent('12 km');
+    });
+
+    it('shows dashes for accommodation that was not filled in', async () => {
+        serveClient({ ...MARIE, accommodationType: null, supportedHousing: null, travelDistanceKm: null, hasElevator: false, lockCode: null });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Druh ubytování')).toHaveTextContent('–');
+        expect(detailValue('Kód od zámku')).toHaveTextContent('–');
+        expect(detailValue('Výtah v domě')).toHaveTextContent('Ne');
+        expect(screen.queryByText('Dům s pečovatelskou službou', { selector: 'dt' })).not.toBeInTheDocument();
     });
 
     it('shows when and why the contract of a terminated client ended', async () => {
@@ -187,6 +230,25 @@ describe('ClientDetail – edit', () => {
         expect(await screen.findByRole('heading', { level: 1, name: 'Marie Nová' })).toBeInTheDocument();
         expect(await screen.findByRole('link', { name: '603 999 888' })).toBeInTheDocument();
         expect(screen.getByText('Klient úspěšně aktualizován')).toBeInTheDocument();
+    });
+
+    it('edits the accommodation with the house address locked', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+
+        expect(screen.getByLabelText(/^Kód od zámku/)).toHaveValue('4821');
+        await waitFor(() => expect(screen.getByLabelText(/^Dům s pečovatelskou službou/)).toHaveTextContent('DPS Slovany'));
+        expect(screen.getByLabelText(/^Ulice a číslo popisné/)).toHaveAttribute('readonly');
+
+        await user.clear(screen.getByLabelText(/^Kód od zámku/));
+        await user.type(screen.getByLabelText(/^Kód od zámku/), '9999');
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body).toMatchObject({ accommodationType: 'SUPPORTED_HOUSING', supportedHousingId: 5, lockCode: '9999', travelDistanceKm: 12, hasElevator: true });
     });
 
     it('does not save an invalid form', async () => {

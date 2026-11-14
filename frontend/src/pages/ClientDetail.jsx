@@ -9,7 +9,7 @@ import { useEmployees } from "../hooks/useEmployees.jsx";
 import { useTasks } from "../hooks/useTasks.jsx";
 import { useRecordForm } from "../hooks/useRecordForm";
 import { ROLES } from "../constants/roles.js";
-import { benefitsOptions, genderTranslations, terminationReasonOptions } from "../constants/clientConstants.js";
+import { accessMethodOptions, accommodationTypeOptions, benefitsOptions, genderTranslations, terminationReasonOptions } from "../constants/clientConstants.js";
 import { formatDate } from "../utils/formatters.js";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { pictureUrl } from "@/lib/pictures";
@@ -98,6 +98,19 @@ function ClientView({ client, onShowMap }) {
                         </DetailItem>
                         <DetailItem label="Kontakt na příbuzné">{client.relativesContact}</DetailItem>
                         <DetailItem label="Praktický lékař">{client.generalPractitioner}</DetailItem>
+                    </dl>
+                </DetailCard>
+
+                <DetailCard title="Ubytování">
+                    <dl className="grid gap-4 sm:grid-cols-2">
+                        <DetailItem label="Druh ubytování">{optionName(accommodationTypeOptions, client.accommodationType)}</DetailItem>
+                        {client.supportedHousing && <DetailItem label="Dům s pečovatelskou službou">{client.supportedHousing.name}</DetailItem>}
+                        <DetailItem label="Patro nebo pokoj">{client.floorOrRoom}</DetailItem>
+                        <DetailItem label="Výtah v domě">{client.hasElevator ? "Ano" : "Ne"}</DetailItem>
+                        <DetailItem label="Přístup do bytu">{optionName(accessMethodOptions, client.accessMethod)}</DetailItem>
+                        <DetailItem label="Kód od zámku">{client.lockCode}</DetailItem>
+                        <DetailItem label="Poznámka k přístupu" className="sm:col-span-2">{client.accessNote}</DetailItem>
+                        <DetailItem label="Dojezdová vzdálenost">{client.travelDistanceKm != null && <span className="tabular-nums">{client.travelDistanceKm} km</span>}</DetailItem>
                     </dl>
                 </DetailCard>
 

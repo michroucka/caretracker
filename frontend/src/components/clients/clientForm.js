@@ -7,6 +7,7 @@ const PHONE = /^(\+\d{3} )?\d{3} \d{3} \d{3}$/;
 const POSTAL_CODE = /^\d{3} \d{2}$/;
 
 export const OLDEST_BIRTH_DATE = "1900-01-01";
+export const SUPPORTED_HOUSING = "SUPPORTED_HOUSING";
 
 export function emptyClient(defaultDepartmentId) {
     return toFormValues({ department: defaultDepartmentId ? { id: defaultDepartmentId } : null });
@@ -25,6 +26,14 @@ export function toFormValues(client) {
         street: client?.street ?? "",
         city: client?.city ?? "",
         postalCode: formatPostalCode(client?.postalCode ?? ""),
+        accommodationType: client?.accommodationType ?? "",
+        supportedHousingId: client?.supportedHousing?.id ?? null,
+        travelDistanceKm: client?.travelDistanceKm == null ? "" : String(client.travelDistanceKm),
+        hasElevator: client?.hasElevator ?? false,
+        floorOrRoom: client?.floorOrRoom ?? "",
+        accessMethod: client?.accessMethod ?? "",
+        lockCode: client?.lockCode ?? "",
+        accessNote: client?.accessNote ?? "",
         email: client?.email ?? "",
         phone: formatPhoneNumber(client?.phone ?? ""),
         legallyCompetent: client?.legallyCompetent ?? true,
@@ -47,10 +56,19 @@ export function validateClient(values, { withTermination = false } = {}) {
     if (!values.dateOfBirth) errors.dateOfBirth = "Prosím zadejte datum narození";
     if (!values.departmentId) errors.departmentId = "Prosím vyberte středisko";
     if (!values.caregiverId) errors.caregiverId = "Prosím vyberte klíčového pracovníka";
-    if (!values.street.trim()) errors.street = "Prosím zadejte ulici a číslo popisné";
-    if (!values.city.trim()) errors.city = "Prosím zadejte město";
-    if (!values.postalCode) errors.postalCode = "Prosím zadejte PSČ";
-    else if (!POSTAL_CODE.test(values.postalCode)) errors.postalCode = "PSČ ve tvaru 123 45";
+    if (values.accommodationType === SUPPORTED_HOUSING) {
+        // the server copies the address from the chosen house
+        if (!values.supportedHousingId) errors.supportedHousingId = "Vyberte dům s pečovatelskou službou";
+    } else {
+        if (!values.street.trim()) errors.street = "Prosím zadejte ulici a číslo popisné";
+        if (!values.city.trim()) errors.city = "Prosím zadejte město";
+        if (!values.postalCode) errors.postalCode = "Prosím zadejte PSČ";
+        else if (!POSTAL_CODE.test(values.postalCode)) errors.postalCode = "PSČ ve tvaru 123 45";
+    }
+    if (values.travelDistanceKm.trim()) {
+        if (!/^-?\d+$/.test(values.travelDistanceKm.trim())) errors.travelDistanceKm = "Zadejte dojezdovou vzdálenost v celých kilometrech";
+        else if (Number(values.travelDistanceKm) < 0) errors.travelDistanceKm = "Dojezdová vzdálenost nesmí být záporná";
+    }
     if (values.email.trim() && !EMAIL.test(values.email.trim())) errors.email = "Zadejte platnou e-mailovou adresu";
     if (values.phone && !PHONE.test(values.phone)) errors.phone = "Telefon ve tvaru 123 456 789 nebo +420 123 456 789";
     // the number goes into the 10-digit payment variable symbol after year and month
@@ -78,6 +96,14 @@ export function toRequest(values) {
         street: values.street.trim(),
         city: values.city.trim(),
         postalCode: values.postalCode,
+        accommodationType: values.accommodationType || null,
+        supportedHousingId: values.accommodationType === SUPPORTED_HOUSING ? values.supportedHousingId : null,
+        travelDistanceKm: values.travelDistanceKm.trim() ? Number(values.travelDistanceKm) : null,
+        hasElevator: values.hasElevator,
+        floorOrRoom: orNull(values.floorOrRoom),
+        accessMethod: values.accessMethod || null,
+        lockCode: orNull(values.lockCode),
+        accessNote: orNull(values.accessNote),
         email: orNull(values.email),
         phone: values.phone || null,
         legallyCompetent: values.legallyCompetent,

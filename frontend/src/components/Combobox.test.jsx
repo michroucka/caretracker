@@ -86,4 +86,42 @@ describe('Combobox', () => {
 
         expect(trigger).toBeDisabled();
     });
+
+    describe('with allowsCustomValue', () => {
+        const CITIES = [{ value: 'Plzeň', label: 'Plzeň' }, { value: 'Klatovy', label: 'Klatovy' }];
+
+        it('offers the typed text as a value that is not among the options', async () => {
+            const { user, onChange, trigger } = renderCombobox({ options: CITIES, allowsCustomValue: true });
+
+            await user.click(trigger);
+            await user.type(screen.getByRole('combobox', { name: '' }), 'Dobřany');
+            await user.click(screen.getByRole('option', { name: /Dobřany/ }));
+
+            expect(onChange).toHaveBeenCalledWith('Dobřany');
+        });
+
+        it('does not offer the typed text again when it equals an option', async () => {
+            const { user, trigger } = renderCombobox({ options: CITIES, allowsCustomValue: true });
+
+            await user.click(trigger);
+            await user.type(screen.getByRole('combobox', { name: '' }), 'plzeň');
+
+            expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Plzeň']);
+        });
+
+        it('shows a custom value on the trigger', () => {
+            const { trigger } = renderCombobox({ options: CITIES, allowsCustomValue: true, value: 'Dobřany' });
+
+            expect(trigger).toHaveTextContent('Dobřany');
+        });
+
+        it('does not offer typed text without the prop', async () => {
+            const { user, trigger } = renderCombobox({ options: CITIES });
+
+            await user.click(trigger);
+            await user.type(screen.getByRole('combobox', { name: '' }), 'Dobřany');
+
+            expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        });
+    });
 });

@@ -37,7 +37,7 @@ Změna 2026-11-09: testy píše Claude, uživatel je prochází v PR. Původní 
 - Testovací data přes `TestData` (`testData.department(org)`, `testData.employee(dept, CAREGIVER)`), ne kopírovaný setup v každém testu. Metody vyplní povinná pole unikátními hodnotami, test mění jen to, na čem mu záleží.
 - Mockovat jen hranice systému (e-mail, geokódování, QR API, čas). Vlastní repozitáře a služby v integračních testech nemockovat.
 - Čas: kde logika závisí na „dnes“ (nástěnka, tento měsíc), injektovat `Clock` místo `LocalDate.now()`. Přidá se při psaní prvního takového testu.
-- Testy jsou nezávislé na pořadí. Integrační testy po sobě uklízí (`DatabaseCleaner` před každým testem vyprázdní všechny tabulky včetně dummy dat z migrací).
+- Testy jsou nezávislé na pořadí. Integrační testy po sobě uklízí (`DatabaseCleaner` před každým testem vyprázdní všechny tabulky; migrace demo data neobsahují, ta nahrává `DemoDataSeeder` jen v profilech `demo` a `dev`).
 - Na frontendu dotazy podle priority Testing Library: `getByRole` > `getByLabelText` > `getByText` > `getByTestId` (poslední možnost).
 
 ## 4. Co čím testovat

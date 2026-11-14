@@ -93,6 +93,8 @@ echo "app.remember-me.key=$(openssl rand -base64 32)" >> backend/src/main/resour
 make up
 ```
 
+Do prázdné databáze nahraje backend při startu smyšlená česká demo data (účty `superadmin`, `admin`, `coordinator`, `caregiver`, `client`, heslo `heslo`); generuje je `tools/demo-data/generate.py`.
+
 Bez `app.remember-me.key` backend nenastartuje. Na demu ho nastavuje proměnná `REMEMBER_ME_KEY` (vzor v `.env.demo.example`).
 
 | Služba | Adresa |

@@ -46,21 +46,21 @@ export function ClientDocuments({ clientId, canModify }) {
         <div className="grid gap-4">
             {!loading && documents.length === 0 && <p className="text-muted-foreground">Klient zatím nemá žádné dokumenty.</p>}
             {documents.length > 0 && (
-                <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <ul className="flex flex-wrap gap-2">
                     {documents.map((document) => (
-                        <li key={document.id} className="flex items-center gap-3 rounded-lg border p-3">
+                        <li key={document.id} className="flex max-w-full items-center gap-2 rounded-lg border py-1.5 pr-1 pl-2.5 sm:max-w-80">
                             {document.contentType === "application/pdf"
-                                ? <IconFileTypePdf className="size-8 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                : <IconPhoto className="size-8 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                                ? <IconFileTypePdf className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                : <IconPhoto className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
                             <div className="grid min-w-0 flex-1">
-                                <span className="truncate font-medium">{document.fileName}</span>
-                                <span className="text-sm text-muted-foreground">
+                                <span className="truncate text-sm font-medium">{document.fileName}</span>
+                                <span className="truncate text-xs text-muted-foreground">
                                     {[typeName(document.type), formatDate(document.uploadedAt), document.uploadedByName].filter(Boolean).join(" · ")}
                                 </span>
                             </div>
-                            <div className="flex shrink-0 gap-1">
-                                <Button variant="ghost" size="icon" aria-label={`Stáhnout dokument ${document.fileName}`} onClick={() => downloadDocument(document)}><IconDownload /></Button>
-                                {canModify && <Button variant="ghost" size="icon" aria-label={`Smazat dokument ${document.fileName}`} onClick={() => setDocumentToDelete(document)}><IconTrash /></Button>}
+                            <div className="flex shrink-0">
+                                <Button variant="ghost" size="icon-row" aria-label={`Stáhnout dokument ${document.fileName}`} onClick={() => downloadDocument(document)}><IconDownload /></Button>
+                                {canModify && <Button variant="ghost" size="icon-row" aria-label={`Smazat dokument ${document.fileName}`} onClick={() => setDocumentToDelete(document)}><IconTrash /></Button>}
                             </div>
                         </li>
                     ))}

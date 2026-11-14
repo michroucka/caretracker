@@ -5,7 +5,7 @@ import { useRecordForm } from "@/hooks/useRecordForm";
 import { TaskFields } from "./TaskFields";
 import { EMPTY_TASK, toRequest, validateTask } from "./taskForm";
 
-export function TaskCreateDialog({ open, onOpenChange, onCreate, organizationId }) {
+export function TaskCreateDialog({ open, onOpenChange, onCreate, organizationId, statutoryTasks }) {
     const form = useRecordForm(EMPTY_TASK);
     const { reset } = form;
 
@@ -15,7 +15,7 @@ export function TaskCreateDialog({ open, onOpenChange, onCreate, organizationId 
 
     const create = async (event) => {
         event.preventDefault();
-        const created = await form.submit(validateTask, (values) => onCreate(toRequest(values, organizationId)));
+        const created = await form.submit((values) => validateTask(values, statutoryTasks), (values) => onCreate(toRequest(values, organizationId)));
         if (created) onOpenChange(false);
     };
 
@@ -27,7 +27,7 @@ export function TaskCreateDialog({ open, onOpenChange, onCreate, organizationId 
                         <DialogTitle>Nový úkon</DialogTitle>
                         <DialogDescription>Služba, kterou pečovatelé zapisují a která se klientům účtuje.</DialogDescription>
                     </DialogHeader>
-                    <TaskFields idPrefix="task-create" values={form.values} errors={form.errors} onChange={form.setField} disabled={form.isSubmitting} shakeSignal={form.submitCount} />
+                    <TaskFields idPrefix="task-create" values={form.values} errors={form.errors} onChange={form.setField} disabled={form.isSubmitting} shakeSignal={form.submitCount} statutoryTasks={statutoryTasks} />
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.isSubmitting}>Zrušit</Button>
                         <Button type="submit" disabled={form.isSubmitting}>{form.isSubmitting ? "Vytvářím…" : "Vytvořit úkon"}</Button>

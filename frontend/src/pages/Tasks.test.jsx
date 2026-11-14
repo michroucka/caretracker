@@ -15,7 +15,16 @@ const SHOPPING = task();
 const TRANSPORT = task({ id: 12, name: 'Doprava', unitType: 'KM', unitPrice: 12 });
 const BATHING = task({ id: 13, name: 'Koupel', unitType: 'OCCURRENCE', unitPrice: 90, doubleMeeting: true });
 
+const FEEDING = { id: 1, code: '§ 6 a) 1.', name: 'Pomoc při podávání jídla a pití', shortName: 'Podání jídla', unitType: 'HOUR', maxUnitPrice: 135, importedTaskId: null };
+const WASHING = { id: 2, code: '§ 6 b) 2.', name: 'Pomoc při osobní hygieně', shortName: 'Osobní hygiena', unitType: 'OCCURRENCE', maxUnitPrice: 90, importedTaskId: 13 };
+const WALK = { id: 3, code: '§ 6 c) 1.', name: 'Doprovod na procházku', shortName: 'Procházka', unitType: 'HOUR', maxUnitPrice: 100, importedTaskId: null };
+
+function serveStatutoryTasks(items = []) {
+    return serveAndRecord('get', '/statutory-tasks', () => HttpResponse.json(items));
+}
+
 function serveTasks(tasks = [SHOPPING, TRANSPORT, BATHING]) {
+    serveStatutoryTasks();
     const taskRequests = serveAndRecord('get', '/tasks', () => HttpResponse.json(tasks));
     server.use(http.get(apiUrl('/tasks/:id'), ({ params }) => HttpResponse.json(tasks.find((item) => item.id === Number(params.id)))));
     return taskRequests;
@@ -151,6 +160,188 @@ describe('Tasks', () => {
         });
     });
 
+    describe('statutory tasks', () => {
+        const openImportDialog = async (user) => {
+            await user.click(await screen.findByRole('button', { name: 'Načíst úkony z vyhlášky' }));
+            return screen.findByRole('dialog', { name: 'Načíst úkony z vyhlášky' });
+        };
+
+        it.each([['coordinator', coordinator], ['caregiver', caregiver]])('does not offer the import to a %s', async (_role, user) => {
+            serveTasks();
+
+            renderTasks(user());
+
+            await screen.findByText('Nákup');
+            expect(screen.queryByRole('button', { name: 'Načíst úkony z vyhlášky' })).not.toBeInTheDocument();
+        });
+
+        it('does not offer the import to a superadmin before an organization is chosen', async () => {
+            serveTasks();
+
+            renderTasks(superadmin());
+
+            await screen.findByText('Vyberte organizaci');
+            expect(screen.queryByRole('button', { name: 'Načíst úkony z vyhlášky' })).not.toBeInTheDocument();
+        });
+
+        it('lists the items with names, unit and maximum and marks the imported ones', async () => {
+            serveTasks();
+            serveStatutoryTasks([FEEDING, WASHING]);
+            const { user } = renderTasks(admin());
+
+            const dialog = await openImportDialog(user);
+
+            expect(within(dialog).getByText('Pomoc při podávání jídla a pití')).toBeInTheDocument();
+            expect(within(dialog).getByText(/Hodina · max\. 135 Kč/)).toBeInTheDocument();
+            expect(within(dialog).getByRole('checkbox', { name: 'Podání jídla' })).not.toBeChecked();
+            const imported = within(dialog).getByRole('checkbox', { name: 'Osobní hygiena' });
+            expect(imported).toBeChecked();
+            expect(imported).toBeDisabled();
+            expect(within(dialog).getAllByText('Už v katalogu')).toHaveLength(1);
+        });
+
+        it('selects and clears only the items that are not imported yet', async () => {
+            serveTasks();
+            serveStatutoryTasks([FEEDING, WASHING, WALK]);
+            const { user } = renderTasks(admin());
+            const dialog = await openImportDialog(user);
+
+            await user.click(within(dialog).getByRole('button', { name: 'Vybrat vše' }));
+            expect(within(dialog).getByRole('checkbox', { name: 'Podání jídla' })).toBeChecked();
+            expect(within(dialog).getByRole('checkbox', { name: 'Procházka' })).toBeChecked();
+            expect(within(dialog).getByRole('checkbox', { name: 'Osobní hygiena' })).toBeChecked();
+
+            await user.click(within(dialog).getByRole('button', { name: 'Zrušit výběr' }));
+            expect(within(dialog).getByRole('checkbox', { name: 'Podání jídla' })).not.toBeChecked();
+            expect(within(dialog).getByRole('checkbox', { name: 'Procházka' })).not.toBeChecked();
+            expect(within(dialog).getByRole('checkbox', { name: 'Osobní hygiena' })).toBeChecked();
+        });
+
+        it('sends only the selected ids, shows the count and refreshes the catalog', async () => {
+            const taskRequests = serveTasks();
+            serveStatutoryTasks([FEEDING, WASHING, WALK]);
+            const imports = serveAndRecord('post', '/tasks/import-statutory', () => HttpResponse.json([task({ id: 30, name: 'Procházka' })]));
+            const { user } = renderTasks(admin());
+            const dialog = await openImportDialog(user);
+            const requestsBefore = taskRequests.length;
+
+            await user.click(within(dialog).getByRole('checkbox', { name: 'Procházka' }));
+            await user.click(within(dialog).getByRole('button', { name: 'Načíst vybrané' }));
+
+            expect(await screen.findByText('Načteno 1 úkonů')).toBeInTheDocument();
+            expect(imports[0].body).toEqual({ statutoryTaskIds: [3] });
+            await waitFor(() => expect(taskRequests.length).toBeGreaterThan(requestsBefore));
+            await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Načíst úkony z vyhlášky' })).not.toBeInTheDocument());
+        });
+
+        it('imports into the organization chosen by a superadmin', async () => {
+            serveTasks();
+            serveStatutoryTasks([FEEDING]);
+            const imports = serveAndRecord('post', '/tasks/import-statutory', () => HttpResponse.json([task({ id: 30 })]));
+            const { user } = renderTasks(asSuperadminOf({ id: 5, name: 'Charita Plzeň' }));
+            const dialog = await openImportDialog(user);
+
+            await user.click(within(dialog).getByRole('checkbox', { name: 'Podání jídla' }));
+            await user.click(within(dialog).getByRole('button', { name: 'Načíst vybrané' }));
+
+            await waitFor(() => expect(imports).toHaveLength(1));
+            expect(imports[0].searchParams.get('organizationId')).toBe('5');
+        });
+
+        it('cannot confirm when nothing is selected or everything is imported', async () => {
+            serveTasks();
+            serveStatutoryTasks([WASHING]);
+            const { user } = renderTasks(admin());
+
+            const dialog = await openImportDialog(user);
+
+            expect(within(dialog).getByRole('button', { name: 'Načíst vybrané' })).toBeDisabled();
+        });
+
+        it('keeps the dialog open with the server message when the import fails', async () => {
+            serveTasks();
+            serveStatutoryTasks([FEEDING]);
+            serveAndRecord('post', '/tasks/import-statutory', serverError('Nahrávání selhalo', 400));
+            const { user } = renderTasks(admin());
+            const dialog = await openImportDialog(user);
+
+            await user.click(within(dialog).getByRole('checkbox', { name: 'Podání jídla' }));
+            await user.click(within(dialog).getByRole('button', { name: 'Načíst vybrané' }));
+
+            expect(await screen.findByText('Nahrávání selhalo')).toBeInTheDocument();
+            expect(screen.getByRole('dialog', { name: 'Načíst úkony z vyhlášky' })).toBeInTheDocument();
+        });
+
+        it('shows the official name under the name in the list', async () => {
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
+
+            renderTasks(admin());
+
+            expect(await screen.findByText('Pomoc při osobní hygieně')).toBeInTheDocument();
+        });
+
+        it('shows the full official name and code in the detail of a renamed linked task', async () => {
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně', statutoryMaxUnitPrice: 90 })]);
+
+            renderTasks(admin(), '/tasks?detail=13');
+
+            const sheet = await screen.findByRole('dialog');
+            expect(await within(sheet).findByText('§ 6 b) 2.')).toBeInTheDocument();
+            expect(within(sheet).getByText('Pomoc při osobní hygieně')).toBeInTheDocument();
+        });
+
+        it('prefills name, unit and price from the chosen item and sends the link', async () => {
+            serveTasks();
+            serveStatutoryTasks([FEEDING, WALK]);
+            const creates = serveAndRecord('post', '/tasks', () => HttpResponse.json(task({ id: 20 })));
+            const { user } = renderTasks(admin());
+
+            const dialog = await openCreateDialog(user);
+            await user.click(await within(dialog).findByRole('combobox', { name: 'Položka vyhlášky' }));
+            await user.click(await screen.findByRole('option', { name: /Procházka/ }));
+
+            expect(within(dialog).getByRole('textbox', { name: 'Název' })).toHaveValue('Procházka');
+            expect(within(dialog).getByRole('textbox', { name: 'Cena' })).toHaveValue('100');
+            expect(within(dialog).getByRole('combobox', { name: 'Jednotka' })).toHaveTextContent('Hodina');
+
+            await user.click(within(dialog).getByRole('button', { name: 'Vytvořit úkon' }));
+
+            await waitFor(() => expect(creates).toHaveLength(1));
+            expect(creates[0].body).toMatchObject({ name: 'Procházka', unitType: 'HOUR', unitPrice: 100, statutoryTaskId: 3 });
+        });
+
+        it('rejects a price over the maximum of the chosen item', async () => {
+            serveTasks();
+            serveStatutoryTasks([WALK]);
+            const creates = serveAndRecord('post', '/tasks', () => HttpResponse.json(task({ id: 20 })));
+            const { user } = renderTasks(admin());
+
+            const dialog = await openCreateDialog(user);
+            await user.click(await within(dialog).findByRole('combobox', { name: 'Položka vyhlášky' }));
+            await user.click(await screen.findByRole('option', { name: /Procházka/ }));
+            await user.type(within(dialog).getByRole('textbox', { name: 'Cena' }), '5');
+            await user.click(within(dialog).getByRole('button', { name: 'Vytvořit úkon' }));
+
+            expect(await within(dialog).findByText('Cena převyšuje maximální úhradu podle vyhlášky (100 Kč)')).toBeInTheDocument();
+            expect(creates).toHaveLength(0);
+        });
+
+        it('unlinks the task when the link is removed', async () => {
+            serveTasks([task({ id: 13, name: 'Hygiena u nás', statutoryTaskId: 2, statutoryTaskCode: '§ 6 b) 2.', statutoryTaskName: 'Pomoc při osobní hygieně' })]);
+            serveStatutoryTasks([WASHING]);
+            const updates = serveAndRecord('put', '/tasks/:id', () => HttpResponse.json(task({ id: 13 })));
+            const { user } = renderTasks(admin(), '/tasks?detail=13');
+
+            await user.click(await screen.findByRole('button', { name: /Upravit/ }));
+            await user.click(await screen.findByRole('combobox', { name: 'Položka vyhlášky' }));
+            await user.click(await screen.findByRole('option', { name: 'Bez vazby na vyhlášku' }));
+            await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+            await waitFor(() => expect(updates).toHaveLength(1));
+            expect(updates[0].body.statutoryTaskId).toBeNull();
+        });
+    });
+
     describe('superadmin', () => {
         it('asks to pick an organization first', async () => {
             const taskRequests = serveTasks();
@@ -236,7 +427,7 @@ describe('Tasks', () => {
 
             expect(await screen.findByText('Úkon úspěšně aktualizován')).toBeInTheDocument();
             expect(updates[0].path).toBe('/api/tasks/11');
-            expect(updates[0].body).toEqual({ name: 'Nákup', unitType: 'HOUR', unitPrice: 18, doubleMeeting: true, organizationId: null });
+            expect(updates[0].body).toEqual({ name: 'Nákup', unitType: 'HOUR', unitPrice: 18, doubleMeeting: true, statutoryTaskId: null, organizationId: null });
             expect(await within(sheet).findByText('18 Kč / hod')).toBeInTheDocument();
         });
 
@@ -276,7 +467,7 @@ describe('Tasks', () => {
             await user.click(within(dialog).getByRole('button', { name: 'Vytvořit úkon' }));
 
             expect(await screen.findByText('Úkon úspěšně vytvořen')).toBeInTheDocument();
-            expect(creates[0].body).toEqual({ name: 'Úklid', unitType: 'KG', unitPrice: 30, doubleMeeting: false, organizationId: null });
+            expect(creates[0].body).toEqual({ name: 'Úklid', unitType: 'KG', unitPrice: 30, doubleMeeting: false, statutoryTaskId: null, organizationId: null });
             expect(await screen.findByText('Úklid')).toBeInTheDocument();
             await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nový úkon' })).not.toBeInTheDocument());
         });

@@ -250,6 +250,10 @@ Pravidlo § 6 odst. 2: hodiny pečovatelské služby klienta v kalendářním m�
 
 ### Task 14 [Claude]: Dokončení a PR
 
+- [ ] **Step 0:** před nasazením V30 spustit na produkční DB a ověřit, že všechny tři dotazy vrátí 0 řádků (V30 má navíc ochranu, která při špatných datech skončí srozumitelnou chybou):
+  - `SELECT organization_id, department_number, count(*) FROM department WHERE department_number IS NOT NULL GROUP BY 1,2 HAVING count(*) > 1;`
+  - `SELECT id, organization_id, department_number FROM department WHERE department_number NOT BETWEEN 1 AND 99;`
+  - `SELECT organization_id, coalesce(max(department_number),0) + count(*) FILTER (WHERE department_number IS NULL) FROM department GROUP BY 1 HAVING coalesce(max(department_number),0) + count(*) FILTER (WHERE department_number IS NULL) > 99;`
 - [ ] **Step 1:** `frontend/`: `npm run lint`, `npm run coverage`, `npm run build`; `backend/`: `./mvnw verify`; `make e2e-up && make e2e` (mění se formulář klienta a demo data), `make e2e-down`. Do zprávy citovat poslední řádek výstupu každého příkazu.
 - [ ] **Step 2:** doplnit `docs/testing/PLAN.md` o nové testy a změnu u 3.7.
 - [ ] **Step 3:** ověřit, že PR #70 je mergnutý a větev je na aktuálním `main` (`git pull --rebase origin main`).

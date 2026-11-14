@@ -105,7 +105,7 @@ Matice: role (SUPERADMIN, ADMIN, COORDINATOR, CAREGIVER, CLIENT, nepřihlášen�
 - [x] Nález, opraveno podle Javadocu: pečovatel dostane ze `GET /api/clients` jen aktivní klienty bez ohledu na `status`; ve frontendu nevidí filtr stavu.
 - [x] Nález z UI, opraveno: u ukončeného klienta šel vytvořit individuální plán. Plán i denní záznamy ukončeného klienta jsou teď jen ke čtení (API vrací 400, stránka nenabízí úpravy) – `InactiveClientPlanIT`, `IndividualPlan.test.jsx`.
 - [x] Mazání denního záznamu sjednoceno podle frontendu: API ho dovolí jen autorovi a adminovi (SUPERADMIN, ADMIN), neexistující záznam vrací 404.
-- [x] Změněno podle připomínek koordinátorky: individuální plán smí upravit pečovatel klienta, koordinátor střediska klienta a admin (`validateIndividualPlanUpdateAccess`, `ClientAccessIT`, `IndividualPlan.test.jsx`). Superadmin nemůže přidat denní záznam (nemá zaměstnance).
+- [x] Změněno podle připomínek koordinátorky (změna oproti dřívějšímu stavu, kdy koordinátor plán upravovat nesměl): koordinátor teď upravuje individuální plány všech klientů ve svém středisku; plán smí dál upravit pečovatel klienta a admin (`validateIndividualPlanUpdateAccess`, `ClientAccessIT`, `IndividualPlan.test.jsx`). Superadmin nemůže přidat denní záznam (nemá zaměstnance).
 - [x] **[claude]** Zaměstnanci, střediska, organizace, úkony (katalog), provedené úkony (včetně `receipt`, `receipts`, `payment-qr` – klient jen svoje), nástěnka (`view` nepovolený pro roli spadne na výchozí), `/api/user/me` a vlastní fotka. Třídy `EmployeeAccessIT`, `DepartmentAccessIT`, `OrganizationAccessIT`, `TaskAccessIT`, `PerformedTaskAccessIT` (matice) a k nim `*ListAccessIT` (rozsah seznamu), `DashboardAccessIT`, `DashboardScopeIT`, `OwnAccountIT`.
 - [x] **[claude]** Nepřihlášený na každý chráněný endpoint → 401: `UnauthenticatedAccessIT`. Druhý test čte všechny endpointy ze Springu a selže, když nový endpoint v seznamu chybí.
 - [x] Nálezy (opraveno, testy je hlídají):
@@ -123,6 +123,16 @@ Matice: role (SUPERADMIN, ADMIN, COORDINATOR, CAREGIVER, CLIENT, nepřihlášen�
   - Provedený úkon: nově přidaný pečovatel musí být ze střediska klienta (pečovatel, který mezitím přešel jinam, na starém záznamu zůstává). Pečovatel musí být mezi pečovateli svého záznamu, koordinátor a admin ne. Formulář to hlídá taky.
   - `PUT /api/departments/{id}` stav `active` nemění, deaktivace jen přes `/terminate` (s kontrolou aktivních klientů a zaměstnanců).
   - Vedoucí organizace musí patřit do té organizace (i u superadmina).
+- [x] **[claude]** Změny podle připomínek koordinátorky (větev `feat/coordinator-feedback`):
+  - Ubytování: `AccommodationIT` (obce střediska, podporované bydlení, adresa a souřadnice klientů domu se mění s adresou domu, přístupové údaje a vzdálenost; kód zámku není v seznamu klientů) a `AccommodationAccessIT` (matice aktérů nad obcemi a podporovaným bydlením).
+  - Dokumenty klienta: `ClientDocumentIT` (typ podle obsahu souboru, prázdný a podvržený soubor, neznámý typ, řazení, cizí klient, ukončený klient jen ke čtení) a `ClientDocumentAccessIT` (matice aktérů: seznam, stažení, nahrání, smazání).
+  - Katalog úkonů podle vyhlášky: `StatutoryTaskCatalogIT` (celý katalog, import vybraných položek s krátkým názvem, maximem a vazbou, opakovaný import nic nevytvoří, ručně propojený úkon se přeskočí, cena nad maximem, jednotka musí sedět, zrušení vazby), rozšířené `TaskAccessIT`.
+  - Osobní číslo a formulář klienta: `ClientPersonalNumberIT` (předvyplnění, předpona), `ClientCreateValidationIT` (opatrovník u nesvéprávného klienta, smlouva, výtah), `DepartmentLifecycleIT` (povinné číslo střediska).
+  - Migrace: `DepartmentNumberMigrationIT` (V30 číslování střediska: platná data, číslo mimo rozsah, duplicita, přetečení nad 99; chyba pojmenuje středisko nebo organizaci).
+  - Stvrzenky a nástěnka: `ReceiptIT` (80 hodin v měsíci se účtuje sníženou sazbou, stvrzenka bez poplatku má nulový součet a žádnou platbu, QR kód jen pro klienty s poplatkem, QR bez poplatku vrací 204), `ReceiptFormattingTest` (dělení hodin nad prahem, vlastní hodinové úkony se nepočítají, pořadí podle data záznamu, zaokrouhlení částí zvlášť), `DashboardTotalsIT` (příjem nad 80 hodin odpovídá stvrzence), `PerformedTaskRepositoryIT`.
+  - Frontend: `clientForm.test.js`, `ClientCreate.test.jsx`, `ClientDetail.test.jsx` (ubytování, opatrovník, smlouva, třístavový výtah, dokumenty), `DepartmentSheet.test.jsx` a `departmentForm.test.js` (obce, podporované bydlení, číslo střediska), `Tasks.test.jsx` a `taskForm.test.js` (import z vyhlášky, maximum ceny), `IndividualPlan.test.jsx`, `Combobox.test.jsx`, `formatters.test.js`, `api.test.js`.
+  - E2E: formulář klienta se změnil a klienti 4, 6, 8 z demo dat jsou nesvéprávní bez opatrovníka, uložení jejich úprav teď selže s „U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka“.
+- [x] **[ty]** Před nasazením V30 ověřit na produkční DB tři dotazy z popisu PR (duplicitní čísla středisek, čísla mimo 1-99, přetečení nad 99), všechny musí vrátit 0 řádků.
   - E-mail účtu se kontroluje na duplicitu (bez ohledu na velikost písmen) při vytvoření a úpravě účtu zaměstnance, klienta i v `PUT /api/user/me`. Unikátní index v DB odložen do kontroly dat.
   - Necháno beze změny: superadmin bez `organizationId` dostane prázdný seznam úkonů a středisek (frontend organizaci vždy posílá). Koordinátor a pečovatel vidí všechna střediska organizace včetně neaktivních (potřebují je filtry).
 
@@ -233,7 +243,7 @@ Jen toky přes celou aplikaci, které unit a integrační testy nepokryjí.
 
 - [x] **[claude]** Setup: Playwright v samostatném `e2e/` (vlastní `package.json`), stack `docker-compose.e2e.yml` (demo build: nginx + jar, demo profil, databáze v tmpfs, port 3040), `make e2e-up` / `make e2e` / `make e2e-down`. Přihlášení všech demo účtů jednou v setup projektu (`storageState`). Job E2E v CI jen na PR do `main`, report a trace jako artefakt.
 - [x] **[claude]** Vzor: koordinátor zapíše úkon a po reloadu ho najde v seznamu (`performed-task.spec.js`). Záznam je jednoznačný díky náhodné vzdálenosti, po testu se smaže přes API.
-- [x] **[claude]** Sidebar podle role a přesměrování z cizí stránky; stažení stvrzenky (PDF začíná `%PDF-`); nová verze individuálního plánu a denní záznam (admin, koordinátor plán upravovat nesmí); nahrání a odebrání fotky na účtu; odhlášení a vypršelá session (17 testů).
+- [x] **[claude]** Sidebar podle role a přesměrování z cizí stránky; stažení stvrzenky (PDF začíná `%PDF-`); nová verze individuálního plánu a denní záznam (admin; koordinátor smí plán upravovat u klientů svého střediska, to hlídá `ClientAccessIT`); nahrání a odebrání fotky na účtu; odhlášení a vypršelá session (17 testů).
 - [x] Nálezy z E2E, opraveny:
   - Vysoká: backend bral „teď“ v časové zóně serveru. V Dockeru je to UTC, takže úkon zapsaný na aktuální český čas byl „v budoucnosti“ a na demu nešel zapsat. `TimeConfig` má teď pevně `Europe/Prague`. Zbývá `LocalDate.now()` bez `Clock` v `Client.created` a v datu vystavení stvrzenky (špatný den jen hodinu až dvě po půlnoci).
   - Střední: seznam v Comboboxu, MultiComboboxu a filtru nebyl omezený výškou volného místa. Na obrazovce 1280×720 se seznam klientů ve stvrzence otevřel nad horní okraj a vyhledávání ani první klienti nešli vybrat. Popover má teď `max-h-(--radix-popover-content-available-height)`, stejně jako Select a DropdownMenu.
@@ -284,6 +294,7 @@ Dependabot velké verze neposílá (Maven a npm, viz `.github/dependabot.yml`), 
 
 ## Log změn
 
+- 2026-11-14: změny podle připomínek koordinátorky doplněné do plánu (ubytování, dokumenty klienta, katalog podle vyhlášky, 80 hodin, stvrzenky bez poplatku, číslo střediska).
 - 2026-11-11: filtr podle klienta v seznamu provedených úkonů; plán testování bez otevřených položek.
 - 2026-11-11: ověřená branch protection; staré mockové testy nahrazené IT.
 - 2026-11-10: schéma odpovídá entitám (V29, `bigint` ID), testy validují schéma (`ddl-auto=validate`).

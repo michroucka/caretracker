@@ -55,7 +55,15 @@ public class PictureService {
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new ValidationException("Soubor je příliš velký. Maximální velikost je 5 MB");
         }
-        byte[] original = file.getBytes();
+        return createPictureFromImage(file.getBytes());
+    }
+
+    /**
+     * Resizes an image into a new, not yet saved picture.
+     *
+     * @throws ValidationException if the data is not a readable JPEG, PNG, GIF or WebP image
+     */
+    public Picture createPictureFromImage(byte[] original) {
         if (detectMimeType(original) == null) {
             throw new ValidationException("Nepovolený formát souboru. Povolené formáty: JPEG, PNG, GIF, WEBP");
         }

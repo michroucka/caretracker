@@ -1,20 +1,14 @@
 package cz.zcu.kiv.caretracker.config;
 
-import java.nio.charset.StandardCharsets;
-
 import org.flywaydb.core.Flyway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
-import org.springframework.context.event.EventListener;
-import org.springframework.core.io.Resource;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -33,10 +27,17 @@ public class DemoConfig {
     private Flyway flyway;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private DemoDataSeeder demoDataSeeder;
 
-    @Value("classpath:demo-activity/seed.sql")
-    private Resource demoActivitySeed;
+    /** Every start (a deploy too) begins with an empty schema, DemoDataConfig then loads the demo data. */
+    // static: Flyway runs before this configuration can be created
+    @Bean
+    public static FlywayMigrationStrategy cleanMigrationStrategy() {
+        return migration -> {
+            migration.clean();
+            migration.migrate();
+        };
+    }
 
     @Bean
     @Primary
@@ -60,17 +61,10 @@ public class DemoConfig {
             log.error("Demo reset: failed", e);
             return;
         }
-        seedDemoActivity();
-    }
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void seedDemoActivity() {
         try {
-            // Executed as a single statement on purpose: splitting on ";" would break the DO $$ ... $$ block
-            jdbcTemplate.execute(demoActivitySeed.getContentAsString(StandardCharsets.UTF_8));
-            log.info("Demo activity: performed tasks filled up to now");
-        } catch (Exception e) {
-            log.error("Demo activity: seeding failed", e);
+            demoDataSeeder.seed();
+        } catch (RuntimeException e) {
+            log.error("Demo data: seeding failed", e);
         }
     }
 }

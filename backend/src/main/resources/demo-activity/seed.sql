@@ -5,10 +5,12 @@
 -- so a new run only fills what is missing since the last one. Generated rows are tracked in
 -- demo_generated_performed_task, clear.sql removes exactly those rows.
 --
--- Every active client gets a stable care profile derived from its id (lunch on weekdays, hygiene a few times
--- a week, weekly cleaning, shopping, laundry every other week, an occasional escort). Every 20th client gets
--- nothing, so the dashboard has clients "without a recent record". Tasks are matched by name in the client's
--- organization (Oběd, Hygiena, Úklid, Nákup, Prádlo, Doprovod); HOUR tasks are stored in minutes.
+-- Every client gets the tasks assigned to it (client_task) in a stable rhythm derived from its id and the day
+-- (lunch on weekdays, hygiene a few times a week, weekly cleaning and shopping, laundry every other week,
+-- an occasional ride). Clients with supervision (Dohled) get about three hours of care every day, so they go over
+-- the monthly 80 hours with the reduced rate. Terminated clients get records up to their termination date.
+-- Every 20th client gets nothing, so the dashboard has clients "without a recent record". Tasks are matched
+-- by their short name; HOUR tasks are stored in minutes.
 
 SET client_min_messages = warning;
 
@@ -31,13 +33,15 @@ WITH client_days AS (
            day::date AS day,
            EXTRACT(ISODOW FROM day)::int AS weekday,
            EXTRACT(WEEK FROM day)::int AS week,
-           ABS(HASHTEXT(c.id || ':' || day::date)) AS dice
+           ABS(HASHTEXT(c.id || ':' || day::date)) AS dice,
+           EXISTS (SELECT 1 FROM client_task ct JOIN task t ON t.id = ct.task_id
+                   WHERE ct.client_id = c.id AND t.name = 'Dohled') AS intensive
     FROM client c
     CROSS JOIN LATERAL GENERATE_SERIES(
-        GREATEST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months'), c.created::timestamp),
-        CURRENT_DATE,
+        GREATEST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months'), COALESCE(c.care_from, c.created)::timestamp),
+        LEAST(CURRENT_DATE, COALESCE(c.termination_date, CURRENT_DATE)),
         INTERVAL '1 day') AS day
-    WHERE c.active
+    WHERE (c.active OR c.termination_date IS NOT NULL)
       AND c.caregiver_id IS NOT NULL
       AND c.id % 20 <> 0
       AND NOT EXISTS (
@@ -50,17 +54,41 @@ planned AS (
     FROM client_days cd
     CROSS JOIN LATERAL (VALUES
         ('Oběd', 1::numeric, TIME '11:30' + (cd.dice % 60) * INTERVAL '1 minute',
-            cd.client_id % 3 = 0 AND cd.weekday <= 5),
-        ('Hygiena', (ARRAY[30, 45, 60])[cd.dice % 3 + 1]::numeric, TIME '07:30' + (cd.dice % 90) * INTERVAL '1 minute',
-            cd.client_id % 4 IN (0, 1) AND cd.weekday <= 5 AND cd.dice % 7 < 3),
-        ('Úklid', (ARRAY[60, 90, 120])[cd.dice % 3 + 1]::numeric, TIME '13:00' + (cd.dice % 120) * INTERVAL '1 minute',
+            cd.weekday <= 5),
+        ('Dovoz jídla', 1::numeric, TIME '11:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.weekday <= 5),
+        ('Osobní hygiena', (ARRAY[30, 45, 60])[cd.dice % 3 + 1]::numeric, TIME '07:30' + (cd.dice % 90) * INTERVAL '1 minute',
+            cd.intensive OR (cd.weekday <= 5 AND cd.dice % 7 < 3)),
+        ('Oblékání', (ARRAY[15, 20, 30])[cd.dice % 3 + 1]::numeric, TIME '07:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.intensive OR (cd.weekday <= 5 AND cd.dice % 7 < 3)),
+        ('Pomoc na WC', (ARRAY[15, 20, 30])[cd.dice % 3 + 1]::numeric, TIME '10:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.dice % 4 = 0),
+        ('Přesun a polohování', (ARRAY[20, 30, 40])[cd.dice % 3 + 1]::numeric, TIME '12:30' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.intensive),
+        ('Podání jídla a pití', (ARRAY[30, 45])[cd.dice % 2 + 1]::numeric, TIME '11:30' + (cd.dice % 30) * INTERVAL '1 minute',
+            cd.intensive),
+        ('Dohled', (ARRAY[60, 90, 120])[cd.dice % 3 + 1]::numeric, TIME '14:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.intensive AND cd.dice % 3 < 2),
+        ('Příprava a podání jídla', (ARRAY[30, 45])[cd.dice % 2 + 1]::numeric, TIME '11:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.weekday <= 5),
+        ('Sledování stavu', 15::numeric, TIME '16:00' + (cd.dice % 60) * INTERVAL '1 minute',
+            cd.weekday <= 5 AND cd.dice % 2 = 0),
+        ('Podání léků', 15::numeric, TIME '08:00' + (cd.dice % 30) * INTERVAL '1 minute',
+            cd.intensive OR cd.weekday <= 5),
+        ('Běžný úklid', (ARRAY[60, 90, 120])[cd.dice % 3 + 1]::numeric, TIME '13:00' + (cd.dice % 120) * INTERVAL '1 minute',
             cd.weekday = cd.client_id % 5 + 1),
-        ('Nákup', (ARRAY[30, 45, 60, 90])[cd.dice % 4 + 1]::numeric, TIME '09:30' + (cd.dice % 150) * INTERVAL '1 minute',
-            cd.client_id % 2 = 0 AND cd.weekday = (cd.client_id + 2) % 5 + 1),
-        ('Prádlo', (2 + (cd.dice % 9) * 0.5)::numeric, TIME '14:00' + (cd.dice % 90) * INTERVAL '1 minute',
-            cd.client_id % 3 = 1 AND cd.weekday = (cd.client_id + 1) % 5 + 1 AND cd.week % 2 = cd.client_id % 2),
-        ('Doprovod', (4 + cd.dice % 27)::numeric, TIME '08:30' + (cd.dice % 240) * INTERVAL '1 minute',
-            cd.weekday <= 5 AND cd.dice % 30 = 0)
+        ('Běžný nákup a pochůzky', (ARRAY[30, 45, 60, 90])[cd.dice % 4 + 1]::numeric, TIME '09:30' + (cd.dice % 150) * INTERVAL '1 minute',
+            cd.weekday = (cd.client_id + 2) % 5 + 1),
+        ('Velký nákup', 1::numeric, TIME '10:00' + (cd.dice % 120) * INTERVAL '1 minute',
+            cd.weekday = (cd.client_id + 3) % 5 + 1 AND cd.week % 4 = cd.client_id % 4),
+        ('Praní osobního prádla', (2 + (cd.dice % 9) * 0.5)::numeric, TIME '14:00' + (cd.dice % 90) * INTERVAL '1 minute',
+            cd.weekday = (cd.client_id + 1) % 5 + 1 AND cd.week % 2 = cd.client_id % 2),
+        ('Doprovod dospělého', (ARRAY[60, 90, 120])[cd.dice % 3 + 1]::numeric, TIME '08:30' + (cd.dice % 120) * INTERVAL '1 minute',
+            cd.weekday <= 5 AND cd.dice % 14 = 0),
+        ('Doprava autem', (4 + cd.dice % 27)::numeric, TIME '08:30' + (cd.dice % 120) * INTERVAL '1 minute',
+            cd.weekday <= 5 AND cd.dice % 14 = 0),
+        ('Pedikúra', 1::numeric, TIME '10:00' + (cd.dice % 180) * INTERVAL '1 minute',
+            cd.weekday = (cd.client_id + 4) % 5 + 1 AND cd.week % 6 = cd.client_id % 6)
     ) AS p(task_name, unit_count, start_time, is_planned)
     WHERE p.is_planned
       AND cd.day + p.start_time <= NOW()
@@ -70,6 +98,7 @@ inserted AS (
     SELECT pl.client_id, t.id, pl.day + pl.start_time, pl.unit_count, t.unit_price, NULL, pl.department_id, pl.organization_id
     FROM planned pl
     JOIN task t ON t.organization_id = pl.organization_id AND t.name = pl.task_name AND t.active
+    JOIN client_task ct ON ct.client_id = pl.client_id AND ct.task_id = t.id
     RETURNING id, client_id
 ),
 tracked AS (

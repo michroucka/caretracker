@@ -19,7 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>
  * PostgreSQL instead of an embedded database ({@code replace = NONE}) because the queries depend on it:
  * native SQL, NUMERIC rounding and microsecond timestamps. Each test runs in a transaction that is rolled back
- * at its end; the database is emptied at its start inside that transaction, so the Flyway dummy data does not
+ * at its end; the database is emptied at its start inside that transaction, so data left by other tests does not
  * leak into results. Entities are created with {@link TestData} as in the other integration tests.
  * <p>
  * Native queries read the database, not the persistence context: call {@link #flushAndClear()} after

@@ -4,8 +4,8 @@ import { storageStateOf } from "./support/accounts.js";
 // only an admin or the client's key worker may change the plan
 test.use({ storageState: storageStateOf("admin") });
 
-// Gaspard Drysdall from the demo seed: active, with a plan
-const CLIENT_WITH_PLAN = 24;
+// Anna Nováková (010002) from the demo seed: active, with a plan
+const CLIENT_WITH_PLAN = 2;
 
 test("admin saves a new version of the individual plan and adds a daily record", async ({ page }) => {
     const diet = `E2E strava ${Date.now()}`;

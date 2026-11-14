@@ -28,7 +28,7 @@ test("coordinator records a performed task and finds it in the list", async ({ p
     const allTasks = sheet.getByRole("checkbox", { name: /Nabízet všechny úkony/ });
     if (await allTasks.count()) await allTasks.check();
     await sheet.getByRole("combobox", { name: /^Úkon/ }).click();
-    await page.getByRole("option", { name: "Doprovod" }).click();
+    await page.getByRole("option", { name: "Doprava autem" }).click();
 
     // a random distance tells this record apart from others of the same client at the same time
     // (the last digit is never 0, the list would drop it)

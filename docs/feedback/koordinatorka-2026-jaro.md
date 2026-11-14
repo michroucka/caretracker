@@ -5,9 +5,9 @@ Testováno na starší verzi, přibližně duben–květen 2026. Stav jednotliv�
 ## 1. Rozdělení středisek na obce
 
 Středisko je potřeba rozdělit na jednotlivé obce (podle města).
-Příklad: středisko Kralovicko zahrnuje obce Kralovice, Hadačka, Výrov, Kozojedy, Bohy, Kozlany atd.
+Příklad: středisko Kralovicko zahrnuje obce Kralovice, Hadačka, Výrov, Kozojedy, Bohy, Kožlany atd.
 
-V obcích jsou domy s pečovatelskou službou (DPS), které patří pod středisko. Pro Kralovicko jsou to DPS v Kralovicích, Kozlanech a Bohách.
+V obcích jsou domy s pečovatelskou službou (DPS), které patří pod středisko. Pro Kralovicko jsou to DPS v Kralovicích, Kožlanech a Bohách.
 Účel zatím není přesně známý, obce budou nejspíš potřeba na víc věcí.
 
 **Návrh (2026-11-13):**

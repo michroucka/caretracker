@@ -6,8 +6,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 
 /**
- * Empties all application tables, including the dummy data inserted by Flyway migrations,
- * so every integration test starts from an empty database and creates only what it needs.
+ * Empties all application tables, so every integration test starts from an empty database and creates only what it needs.
  * The statutory catalog (decree 505/2006 Sb.) is reference data from a migration and stays.
  */
 @TestComponent

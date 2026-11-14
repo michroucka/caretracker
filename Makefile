@@ -1,15 +1,18 @@
 .PHONY: up down start stop restart build rebuild clean logs compile test test-frontend test-backend test-backend-it e2e-up e2e-down e2e-logs e2e demo-up demo-down demo-build demo-reset demo-logs seed-activity clear-activity demo-seed-activity
 
-# Start všech služeb + doplnění demo aktivity (provedené úkony až do teď)
+# Start všech služeb; po dokončení seedu backendu doplní provedené úkony až do teď, aby data vypadala jako živý provoz
 up:
-	docker-compose up -d
-	@echo "Čekám na backend, pak doplním demo aktivitu…"
-	@if for i in $$(seq 1 90); do curl -sf -o /dev/null http://localhost:8080/api/auth-status && break; sleep 2; done \
-		&& curl -sf -o /dev/null http://localhost:8080/api/auth-status; then \
-		$(MAKE) --no-print-directory seed-activity; \
-	else \
-		echo "Backend nenaběhl, demo aktivitu doplníš později přes: make seed-activity"; \
-	fi
+	@since=$$(date -u +%Y-%m-%dT%H:%M:%S); \
+	if [ "$$(docker inspect -f '{{.State.Running}}' caretracker-backend 2>/dev/null)" = "true" ]; then \
+		docker-compose up -d && $(MAKE) --no-print-directory seed-activity && echo "Provedené úkony doplněny do teď" && exit 0; \
+	fi; \
+	docker-compose up -d && \
+	echo "Čekám, až backend dokončí seed dat (při prázdné DB to trvá pár minut)…" && \
+	for i in $$(seq 1 300); do \
+		logs=$$(docker logs --since "$$since" caretracker-backend 2>&1); \
+		if echo "$$logs" | grep -q "Demo data: ready"; then $(MAKE) --no-print-directory seed-activity && echo "Provedené úkony doplněny do teď" && exit 0; fi; \
+		sleep 2; \
+	done; echo "Backend seed nedokončil, aktivitu doplníš později přes: make seed-activity"
 
 # Stop všech služeb
 down:
@@ -72,7 +75,7 @@ e2e-up:
 	@echo "Čekám na backend a demo seed…"
 	@for i in $$(seq 1 90); do \
 		logs=$$(docker compose -f docker-compose.e2e.yml logs backend 2>/dev/null); \
-		if echo "$$logs" | grep -q "Demo activity: seeding failed"; then echo "Demo seed selhal: make e2e-logs"; exit 1; fi; \
+		if echo "$$logs" | grep -q "seeding failed"; then echo "Demo seed selhal: make e2e-logs"; exit 1; fi; \
 		echo "$$logs" | grep -q "Demo activity: performed tasks filled" \
 			&& curl -sf -o /dev/null http://localhost:3040/api/auth-status && exit 0; \
 		sleep 2; \
@@ -106,7 +109,8 @@ demo-logs:
 	docker compose -f docker-compose.demo.yml logs -f $(service)
 
 # Demo aktivita: doplní realistické provedené úkony za posledních 12 měsíců až do teď.
-# Bezpečné spouštět opakovaně (např. jednou měsíčně), doplní jen to, co od minula chybí.
+# Spouští ji make up po každém startu (a backend sám při prvním naplnění DB); bezpečné spouštět opakovaně,
+# doplní jen to, co od minula chybí.
 seed-activity:
 	@docker-compose exec -T db sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/src/main/resources/demo-activity/seed.sql
 

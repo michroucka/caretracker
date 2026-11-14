@@ -4,11 +4,15 @@ import cz.zcu.kiv.caretracker.dto.client.ClientDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientRequestDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientShortDTO;
 import cz.zcu.kiv.caretracker.dto.client.ClientSummaryDTO;
+import cz.zcu.kiv.caretracker.dto.department.SupportedHousingSummaryDTO;
 import cz.zcu.kiv.caretracker.entity.Client;
 import cz.zcu.kiv.caretracker.entity.Department;
 import cz.zcu.kiv.caretracker.entity.Employee;
+import cz.zcu.kiv.caretracker.entity.SupportedHousing;
 import cz.zcu.kiv.caretracker.entity.Task;
 import cz.zcu.kiv.caretracker.entity.User;
+import cz.zcu.kiv.caretracker.enums.AccessMethod;
+import cz.zcu.kiv.caretracker.enums.AccommodationType;
 import cz.zcu.kiv.caretracker.enums.BenefitLevel;
 import cz.zcu.kiv.caretracker.enums.Gender;
 import cz.zcu.kiv.caretracker.enums.TerminationReason;
@@ -63,6 +67,16 @@ public class ClientMapper {
         dto.setDepartment(departmentMapper.toSummaryDTO(client.getDepartment()));
         dto.setCaregiver(employeeMapper.toSummaryDTO(client.getCaregiver()));
         dto.setTasks(taskMapper.toDTOList(client.getTasks()));
+
+        dto.setAccommodationType(client.getAccommodationType() != null ? client.getAccommodationType().name() : null);
+        SupportedHousing housing = client.getSupportedHousing();
+        dto.setSupportedHousing(housing != null ? new SupportedHousingSummaryDTO(housing.getId(), housing.getName()) : null);
+        dto.setTravelDistanceKm(client.getTravelDistanceKm());
+        dto.setHasElevator(client.getHasElevator());
+        dto.setFloorOrRoom(client.getFloorOrRoom());
+        dto.setAccessMethod(client.getAccessMethod() != null ? client.getAccessMethod().name() : null);
+        dto.setLockCode(client.getLockCode());
+        dto.setAccessNote(client.getAccessNote());
 
         return dto;
     }
@@ -129,13 +143,14 @@ public class ClientMapper {
 
     /**
      * Applies fields from a {@link ClientRequestDTO} onto a {@link Client} entity,
-     * resolving the department, organization, caregiver, and task associations.
+     * resolving the department, organization, caregiver, task and supported housing associations.
      */
     public void requestToClient(Client client,
                                 ClientRequestDTO dto,
                                 Department department,
                                 Employee caregiver,
-                                List<Task> tasks
+                                List<Task> tasks,
+                                SupportedHousing supportedHousing
     ) {
         client.setFirstName(dto.getFirstName());
         client.setLastName(dto.getLastName());
@@ -160,6 +175,14 @@ public class ClientMapper {
                 ? TerminationReason.valueOf(dto.getTerminationReason())
                 : null
         );
+        client.setAccommodationType(dto.getAccommodationType() != null ? AccommodationType.valueOf(dto.getAccommodationType()) : null);
+        client.setSupportedHousing(supportedHousing);
+        client.setTravelDistanceKm(dto.getTravelDistanceKm());
+        client.setHasElevator(dto.getHasElevator());
+        client.setFloorOrRoom(dto.getFloorOrRoom());
+        client.setAccessMethod(dto.getAccessMethod() != null ? AccessMethod.valueOf(dto.getAccessMethod()) : null);
+        client.setLockCode(dto.getLockCode());
+        client.setAccessNote(dto.getAccessNote());
     }
 
     /** Maps a list of {@link Client} entities to a list of {@link ClientDTO}s. */

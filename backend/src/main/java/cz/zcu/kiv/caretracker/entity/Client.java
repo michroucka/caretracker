@@ -1,5 +1,7 @@
 package cz.zcu.kiv.caretracker.entity;
 
+import cz.zcu.kiv.caretracker.enums.AccessMethod;
+import cz.zcu.kiv.caretracker.enums.AccommodationType;
 import cz.zcu.kiv.caretracker.enums.BenefitLevel;
 import cz.zcu.kiv.caretracker.enums.Gender;
 import cz.zcu.kiv.caretracker.enums.TerminationReason;
@@ -85,6 +87,35 @@ public class Client {
 
     @Column(nullable = false)
     private Boolean active = Boolean.TRUE;
+
+    @Enumerated
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "accommodation_type")
+    private AccommodationType accommodationType;
+
+    @Column(name = "travel_distance_km")
+    private Integer travelDistanceKm;
+
+    @Column(name = "has_elevator")
+    private Boolean hasElevator;
+
+    @Column(name = "floor_or_room", length = 50)
+    private String floorOrRoom;
+
+    @Enumerated
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "access_method")
+    private AccessMethod accessMethod;
+
+    @Column(name = "lock_code", length = 20)
+    private String lockCode;
+
+    @Column(name = "access_note", columnDefinition = "TEXT")
+    private String accessNote;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supported_housing_id")
+    private SupportedHousing supportedHousing;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id", nullable = false)

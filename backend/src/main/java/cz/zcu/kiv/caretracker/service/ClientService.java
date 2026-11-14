@@ -11,6 +11,7 @@ import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanDTO;
 import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanVersionSummaryDTO;
 import cz.zcu.kiv.caretracker.dto.picture.PictureDTO;
 import cz.zcu.kiv.caretracker.entity.*;
+import cz.zcu.kiv.caretracker.enums.AccommodationType;
 import cz.zcu.kiv.caretracker.enums.TerminationReason;
 import cz.zcu.kiv.caretracker.enums.UserRole;
 import cz.zcu.kiv.caretracker.exception.ResourceNotFoundException;
@@ -47,6 +48,8 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     private EmployeeRepository employeeRepository;
     @Autowired
     private TaskRepository taskRepository;
+    @Autowired
+    private SupportedHousingRepository supportedHousingRepository;
     @Autowired
     private IndividualPlanRepository individualPlanRepository;
     @Autowired
@@ -260,11 +263,16 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             validateOrganizationAccess(task, t -> t.getOrganization().getId());
         }
 
+        SupportedHousing supportedHousing = resolveSupportedHousing(client, dto, department);
+        if (dto.getTravelDistanceKm() != null && dto.getTravelDistanceKm() < 0) {
+            throw new ValidationException("Dojezdová vzdálenost nesmí být záporná");
+        }
+
         boolean addressChanged = !Objects.equals(client.getStreet(), dto.getStreet())
                 || !Objects.equals(client.getCity(), dto.getCity())
                 || !Objects.equals(client.getPostalCode(), dto.getPostalCode());
 
-        clientMapper.requestToClient(client, dto, department, caregiver, tasks);
+        clientMapper.requestToClient(client, dto, department, caregiver, tasks, supportedHousing);
 
         if (addressChanged) {
             Optional<GeocodingService.GeocodeResult> result = geocodingService.geocode(client.getStreet(), client.getCity(), client.getPostalCode());
@@ -281,6 +289,35 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         }
 
         return clientRepository.save(client);
+    }
+
+    /**
+     * A client in supported housing lives at the address of the house, so the house's address replaces the one
+     * in the request. Other kinds of accommodation keep the typed address and no house.
+     * A terminated house cannot be newly chosen, a client already living there keeps it.
+     */
+    private SupportedHousing resolveSupportedHousing(Client client, ClientRequestDTO dto, Department department) {
+        if (!AccommodationType.SUPPORTED_HOUSING.name().equals(dto.getAccommodationType())) {
+            return null;
+        }
+        if (dto.getSupportedHousingId() == null) {
+            throw new ValidationException("Vyberte dům s pečovatelskou službou");
+        }
+
+        SupportedHousing housing = supportedHousingRepository.findById(dto.getSupportedHousingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Dům s pečovatelskou službou nebyl nalezen"));
+        if (!housing.getDepartment().getId().equals(department.getId())) {
+            throw new ValidationException("Dům s pečovatelskou službou nepatří do střediska klienta");
+        }
+        boolean alreadyLivesThere = client.getSupportedHousing() != null && client.getSupportedHousing().getId().equals(housing.getId());
+        if (!housing.getActive() && !alreadyLivesThere) {
+            throw new ValidationException("Dům s pečovatelskou službou je ukončený");
+        }
+
+        dto.setStreet(housing.getStreet());
+        dto.setCity(housing.getCity());
+        dto.setPostalCode(housing.getPostalCode());
+        return housing;
     }
 
     /**

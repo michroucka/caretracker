@@ -1,6 +1,7 @@
 package cz.zcu.kiv.caretracker.dto.client;
 
 import cz.zcu.kiv.caretracker.dto.department.DepartmentSummaryDTO;
+import cz.zcu.kiv.caretracker.dto.department.SupportedHousingSummaryDTO;
 import cz.zcu.kiv.caretracker.dto.task.TaskDTO;
 import cz.zcu.kiv.caretracker.dto.employee.EmployeeSummaryDTO;
 import lombok.AllArgsConstructor;
@@ -40,4 +41,12 @@ public class ClientDTO {
     private DepartmentSummaryDTO department;
     private EmployeeSummaryDTO caregiver;
     private List<TaskDTO> tasks;
+    private String accommodationType;
+    private SupportedHousingSummaryDTO supportedHousing;
+    private Integer travelDistanceKm;
+    private Boolean hasElevator;
+    private String floorOrRoom;
+    private String accessMethod;
+    private String lockCode;
+    private String accessNote;
 }

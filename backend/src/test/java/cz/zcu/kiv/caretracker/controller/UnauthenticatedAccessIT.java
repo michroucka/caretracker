@@ -53,6 +53,13 @@ class UnauthenticatedAccessIT extends AbstractIntegrationTest {
             "PUT /api/departments/{id}",
             "PUT /api/departments/{id}/terminate",
             "PUT /api/departments/{id}/activate",
+            "GET /api/departments/{id}/municipalities",
+            "POST /api/departments/{id}/municipalities",
+            "DELETE /api/departments/{id}/municipalities/{municipalityId}",
+            "GET /api/departments/{id}/supported-housings",
+            "POST /api/departments/{id}/supported-housings",
+            "PUT /api/departments/{id}/supported-housings/{housingId}",
+            "PUT /api/departments/{id}/supported-housings/{housingId}/terminate",
 
             "GET /api/employees",
             "GET /api/employees/{id}",

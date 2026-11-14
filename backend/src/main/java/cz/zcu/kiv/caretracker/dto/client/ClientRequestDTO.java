@@ -30,5 +30,13 @@ public class ClientRequestDTO {
     private List<Long> taskIds;
     private LocalDate terminationDate;
     private String terminationReason;
+    private String accommodationType;
+    private Long supportedHousingId;
+    private Integer travelDistanceKm;
+    private Boolean hasElevator;
+    private String floorOrRoom;
+    private String accessMethod;
+    private String lockCode;
+    private String accessNote;
 }
 

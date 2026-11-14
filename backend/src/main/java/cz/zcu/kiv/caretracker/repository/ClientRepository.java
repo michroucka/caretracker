@@ -23,6 +23,8 @@ public interface ClientRepository extends JpaRepository<Client, Long>, JpaSpecif
 
     List<Client> findByDepartmentId(Long departmentId);
 
+    List<Client> findBySupportedHousingId(Long supportedHousingId);
+
     List<Client> findByOrganizationId(Long organizationId);
 
     boolean existsByPersonalNumberAndOrganizationId(String personalNumber, Long organizationId);

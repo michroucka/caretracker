@@ -127,14 +127,14 @@
 **Files:**
 - Create: `V32__accommodation.sql`, `entity/Municipality.java`, `entity/SupportedHousing.java`, `enums/AccommodationType.java`, `enums/AccessMethod.java`, repozitáře, DTO, `MunicipalityController` a `SupportedHousingController` (nebo endpointy v `DepartmentController`)
 - Modify: `Client.java`, `ClientRequestDTO`, `ClientDTO`, `ClientMapper`, `ClientService.saveClient`
-- Test: nové `AccommodationIT`, `SupportedHousingAccessIT` (AccessScenario)
+- Test: `controller/AccommodationIT`, `controller/AccommodationAccessIT` (AccessScenario), napsal Claude
 
 **Produces:**
 - `AccommodationType { SUPPORTED_HOUSING, RENTED_FLAT, MUNICIPAL_FLAT, FAMILY_HOUSE, OWN_FLAT, WITH_RELATIVES }`
 - `AccessMethod { DOORBELL, KEYS, PHONE_CALL, OTHER }`
 - `Municipality(id, department, name)`; `SupportedHousing(id, department, name, street, city, postalCode, active)`
 - Client: `accommodationType` (nullable kvůli starým záznamům), `supportedHousing` (FK, povinné právě když typ = DPS), `travelDistanceKm Integer`, `hasElevator Boolean`, `floorOrRoom String`, `accessMethod`, `lockCode String(20)`, `accessNote TEXT`
-- `GET/POST/DELETE /api/departments/{id}/municipalities`, `GET/POST/PUT /api/departments/{id}/supported-housings` (+ `terminate` jako u ostatních); čtení všechny zaměstnanecké role ve středisku, zápis SUPERADMIN a ADMIN.
+- `GET/POST/DELETE /api/departments/{id}/municipalities`, `GET/POST/PUT /api/departments/{id}/supported-housings` (+ `terminate` jako u ostatních); čtení zaměstnanci organizace, zápis SUPERADMIN, ADMIN a koordinátor daného střediska (`validateDepartmentAccess`).
 
 - [ ] **Step 1:** testy: klient s typem DPS dostane adresu z DPS, i když request posílá jinou; DPS z jiného střediska → 400 „Dům s pečovatelskou službou nepatří do střediska klienta“; typ DPS bez DPS → 400; změna adresy DPS přepíše adresy jeho klientů; `lockCode` není v odpovědi `GET /api/clients` (seznam); přístupová matice endpointů obcí a DPS.
 - [ ] **Step 2:** FAIL → implementace → PASS.

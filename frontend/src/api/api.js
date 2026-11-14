@@ -260,7 +260,7 @@ export async function deleteImage(endpoint) {
  * @param {string} endpoint
  * @param {string} fileName
  */
-export async function downloadFile(endpoint, fileName) {
+export async function fetchFile(endpoint) {
     const response = await fetch(`${API_URL}${endpoint}`, {
         method: "GET",
         credentials: "include",
@@ -273,7 +273,11 @@ export async function downloadFile(endpoint, fileName) {
         throw new Error(errorData?.message || `HTTP error! status: ${response.status}`);
     }
 
-    const blobUrl = URL.createObjectURL(await response.blob());
+    return response.blob();
+}
+
+export async function downloadFile(endpoint, fileName) {
+    const blobUrl = URL.createObjectURL(await fetchFile(endpoint));
     const link = document.createElement("a");
     link.href = blobUrl;
     link.download = fileName;

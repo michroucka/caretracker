@@ -596,6 +596,32 @@ describe('ClientDetail – documents', () => {
         delete URL.revokeObjectURL;
     });
 
+    it.each([
+        ['a PDF in a frame', CONTRACT_DOCUMENT, 'application/pdf', () => screen.getByTitle('Náhled dokumentu smlouva.pdf')],
+        ['an image', { ...CONTRACT_DOCUMENT, fileName: 'klice.jpg', contentType: 'image/jpeg' }, 'image/jpeg', () => screen.getByRole('img', { name: 'Náhled dokumentu klice.jpg' })],
+    ])('previews %s in the application', async (_, document, contentType, preview) => {
+        serveClient(MARIE, { documents: [document] });
+        const previews = serveAndRecord('get', '/clients/:id/documents/:documentId', () => new HttpResponse('data', { headers: { 'Content-Type': contentType } }));
+        URL.createObjectURL = vi.fn(() => 'blob:http://localhost/preview');
+        URL.revokeObjectURL = vi.fn();
+        try {
+            const { user } = renderDetail();
+
+            await user.click(await screen.findByRole('button', { name: `Zobrazit dokument ${document.fileName}` }));
+
+            expect(await screen.findByRole('dialog', { name: document.fileName })).toBeInTheDocument();
+            await waitFor(() => expect(preview()).toHaveAttribute('src', 'blob:http://localhost/preview'));
+            expect(previews[0].path).toBe('/api/clients/7/documents/1');
+            expect(URL.createObjectURL.mock.calls[0][0].type).toBe(contentType);
+
+            await user.click(screen.getByRole('button', { name: 'Zavřít' }));
+            await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/preview'));
+        } finally {
+            delete URL.createObjectURL;
+            delete URL.revokeObjectURL;
+        }
+    });
+
     it('lets a terminated client only download', async () => {
         serveClient(TERMINATED_MARIE, { documents: [CONTRACT_DOCUMENT] });
 

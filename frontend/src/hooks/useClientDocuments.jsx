@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { deleteJSON, downloadFile, getJSON, uploadFile } from "../api/api.js";
+import { deleteJSON, downloadFile, fetchFile, getJSON, uploadFile } from "../api/api.js";
 import { showErrorToast } from "../utils/errorHandler.jsx";
 import { toast } from "@/components/ui/sonner";
 
@@ -51,5 +51,17 @@ export function useClientDocuments(clientId) {
         }
     };
 
-    return { documents, loading, fetchDocuments, uploadDocument, deleteDocument, downloadDocument };
+    // the stored content type wins, so the browser renders the file instead of offering it for download
+    const fetchDocumentFile = async (document) => {
+        try {
+            const blob = await fetchFile(`/clients/${clientId}/documents/${document.id}`);
+            return new Blob([blob], { type: document.contentType });
+        } catch (err) {
+            console.error("Error loading client document:", err);
+            showErrorToast(err, "Chyba při načítání dokumentu");
+            throw err;
+        }
+    };
+
+    return { documents, loading, fetchDocuments, uploadDocument, deleteDocument, downloadDocument, fetchDocumentFile };
 }

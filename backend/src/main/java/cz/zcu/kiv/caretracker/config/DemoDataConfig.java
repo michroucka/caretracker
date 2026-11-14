@@ -31,5 +31,7 @@ public class DemoDataConfig {
         } catch (RuntimeException e) {
             log.error("Demo data: seeding failed", e);
         }
+        // `make up` waits for this line before it tops up the activity, so the two never run at once
+        log.info("Demo data: ready");
     }
 }

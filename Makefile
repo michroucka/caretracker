@@ -1,9 +1,18 @@
 .PHONY: up down start stop restart build rebuild clean logs compile test test-frontend test-backend test-backend-it e2e-up e2e-down e2e-logs e2e demo-up demo-down demo-build demo-reset demo-logs seed-activity clear-activity demo-seed-activity
 
-# Start všech služeb; backend (profil dev) do prázdné databáze sám nahraje demo data i aktivitu.
-# Provedené úkony za další měsíce doplníš později přes: make seed-activity
+# Start všech služeb; po dokončení seedu backendu doplní provedené úkony až do teď, aby data vypadala jako živý provoz
 up:
-	docker-compose up -d
+	@since=$$(date -u +%Y-%m-%dT%H:%M:%S); \
+	if [ "$$(docker inspect -f '{{.State.Running}}' caretracker-backend 2>/dev/null)" = "true" ]; then \
+		docker-compose up -d && $(MAKE) --no-print-directory seed-activity && echo "Provedené úkony doplněny do teď" && exit 0; \
+	fi; \
+	docker-compose up -d && \
+	echo "Čekám, až backend dokončí seed dat (při prázdné DB to trvá pár minut)…" && \
+	for i in $$(seq 1 300); do \
+		logs=$$(docker logs --since "$$since" caretracker-backend 2>&1); \
+		if echo "$$logs" | grep -q "Demo data: ready"; then $(MAKE) --no-print-directory seed-activity && echo "Provedené úkony doplněny do teď" && exit 0; fi; \
+		sleep 2; \
+	done; echo "Backend seed nedokončil, aktivitu doplníš později přes: make seed-activity"
 
 # Stop všech služeb
 down:
@@ -100,7 +109,7 @@ demo-logs:
 	docker compose -f docker-compose.demo.yml logs -f $(service)
 
 # Demo aktivita: doplní realistické provedené úkony za posledních 12 měsíců až do teď.
-# Při prvním startu ji spustí backend sám; bezpečné spouštět opakovaně (např. jednou měsíčně),
+# Spouští ji make up po každém startu (a backend sám při prvním naplnění DB); bezpečné spouštět opakovaně,
 # doplní jen to, co od minula chybí.
 seed-activity:
 	@docker-compose exec -T db sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/src/main/resources/demo-activity/seed.sql

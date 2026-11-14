@@ -33,7 +33,7 @@ public interface PerformedTaskRepository extends JpaRepository<PerformedTask, Lo
     /**
      * Records of whole calendar months around [start, end) with the price they are billed at, as on the receipt
      * (ReceiptFormatting#billingLines): minutes of statutory hourly tasks over the client's monthly threshold
-     * cost at most the reduced statutory rate, each part rounded on its own. Whole months are read because the
+     * cost at most the reduced statutory rate, each part rounded on its own; records of clients without charge cost 0. Whole months are read because the
      * threshold counts all of the client's records of the month; callers filter the range afterwards.
      */
     String BILLED_RECORDS = """
@@ -42,13 +42,14 @@ public interface PerformedTaskRepository extends JpaRepository<PerformedTask, Lo
                 FROM statutory_hourly_limit ORDER BY id LIMIT 1
             ),
             records AS (
-                SELECT pt.id, pt.date, pt.organization_id, pt.department_id, pt.unit_count, pt.unit_price, t.unit_type,
+                SELECT pt.id, pt.date, pt.organization_id, pt.department_id, c.no_charge, pt.unit_count, pt.unit_price, t.unit_type,
                        (t.unit_type = 'HOUR' AND t.statutory_task_id IS NOT NULL) AS capped,
                        COALESCE(SUM(CASE WHEN t.unit_type = 'HOUR' AND t.statutory_task_id IS NOT NULL THEN pt.unit_count ELSE 0 END)
                            OVER (PARTITION BY pt.client_id, date_trunc('month', pt.date) ORDER BY pt.date, pt.id
                                  ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS capped_minutes_before
                 FROM performed_task pt
                 JOIN task t ON t.id = pt.task_id
+                JOIN client c ON c.id = pt.client_id
                 WHERE pt.date >= date_trunc('month', CAST(:start AS timestamp))
                   AND pt.date < date_trunc('month', CAST(:end AS timestamp) - INTERVAL '1 microsecond') + INTERVAL '1 month'
                   AND (CAST(:organizationId AS bigint) IS NULL OR pt.organization_id = :organizationId)
@@ -56,6 +57,7 @@ public interface PerformedTaskRepository extends JpaRepository<PerformedTask, Lo
             billed AS (
                 SELECT r.id, r.date, r.organization_id, r.department_id,
                        CASE
+                           WHEN r.no_charge THEN 0
                            WHEN r.unit_type <> 'HOUR' THEN ROUND(r.unit_count * r.unit_price)
                            WHEN NOT r.capped OR l.reduced_price IS NULL OR r.unit_price <= l.reduced_price
                                 OR r.capped_minutes_before + r.unit_count <= l.threshold_minutes

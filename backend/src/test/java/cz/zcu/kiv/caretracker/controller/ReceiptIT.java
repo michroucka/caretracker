@@ -15,6 +15,8 @@ import cz.zcu.kiv.caretracker.repository.TaskRepository;
 import cz.zcu.kiv.caretracker.service.PaymentQrClient.PaymentAccount;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import cz.zcu.kiv.caretracker.support.TestImages;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -243,5 +245,73 @@ class ReceiptIT extends AbstractIntegrationTest {
                         .param("year", "2026")
                         .with(loggedInAs(account)))
                 .andExpect(status().isNoContent());
+    }
+
+    private Client clientWithoutCharge(String lastName, String personalNumber) {
+        Client client = client(lastName, personalNumber);
+        client.setNoCharge(true);
+        return clientRepository.save(client);
+    }
+
+    private String receiptText(byte[] pdf) throws Exception {
+        PdfReader reader = new PdfReader(pdf);
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        StringBuilder text = new StringBuilder();
+        for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+            text.append(extractor.getTextFromPage(page)).append('\n');
+        }
+        return text.toString();
+    }
+
+    @Test
+    void clientReceiptWithoutChargeHasZeroTotalAndNoPayment() throws Exception {
+        Client client = clientWithoutCharge("Novák", "000123");
+        records(client, NOVEMBER_FIRST_MORNING);
+
+        byte[] pdf = mockMvc.perform(get("/api/performed-tasks/receipt")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(caregiver)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text = receiptText(pdf);
+        assertThat(text).contains(task.getName()).contains("Služba je poskytována bez úhrady");
+        assertThat(text).containsPattern("Celkem k úhradě[\\s\\u00A0]*0[\\s\\u00A0]+Kč");
+        assertThat(text).doesNotContain("Variabilní symbol");
+        verify(paymentQrClient, never()).fetchPng(any(), anyInt(), anyString());
+    }
+
+    @Test
+    void departmentReceiptsAskForQrCodeOnlyForClientsWithCharge() throws Exception {
+        records(clientWithoutCharge("Novák", "000101"), NOVEMBER_FIRST_MORNING);
+        records(client("Dvořák", "000102"), NOVEMBER_FIRST_MORNING);
+
+        mockMvc.perform(get("/api/performed-tasks/receipts")
+                        .param("departmentId", department.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(coordinator)))
+                .andExpect(status().isOk());
+
+        verify(paymentQrClient).fetchPng(ACCOUNT, 150, "2611000102");
+        verifyNoMoreInteractions(paymentQrClient);
+    }
+
+    @Test
+    void paymentQrCodeOfClientWithoutChargeIsNoContent() throws Exception {
+        Client client = clientWithoutCharge("Novák", "000123");
+        User account = testData.clientAccount(client);
+        records(client, NOVEMBER_FIRST_MORNING);
+
+        mockMvc.perform(get("/api/performed-tasks/payment-qr")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(account)))
+                .andExpect(status().isNoContent());
+
+        verify(paymentQrClient, never()).fetchPng(any(), anyInt(), anyString());
     }
 }

@@ -247,6 +247,22 @@ class DashboardTotalsIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void clientsWithoutChargeContributeNothingToIncomeButTheirTasksAreCounted() throws Exception {
+        Client withoutCharge = testData.client(caregiver);
+        withoutCharge.setNoCharge(true);
+        clientRepository.save(withoutCharge);
+        testData.performedTask(client, visit, LocalDateTime.of(2027, 1, 5, 8, 0), 1);
+        testData.performedTask(withoutCharge, visit, LocalDateTime.of(2027, 1, 6, 8, 0), 1);
+        testData.performedTask(withoutCharge, hourly, LocalDateTime.of(2027, 1, 7, 8, 0), 60);
+
+        String dashboard = dashboard(admin.getUser(), "ORGANIZATION");
+
+        assertThat(JsonPath.<Integer>read(dashboard, "$.totalMonthlyIncome")).isEqualTo(40);
+        assertThat(JsonPath.<List<Integer>>read(dashboard, "$.tasksPerformedByDepartment[*].income")).containsExactly(40);
+        assertThat(JsonPath.<List<Integer>>read(dashboard, "$.tasksPerformedByDepartment[*].performedTasksCount")).containsExactly(3);
+    }
+
+    @Test
     void departmentBreakdownSumsThisMonthBusiestFirst() throws Exception {
         Client otherDepartmentClient = testData.client(testData.employee(otherDepartment, EmployeeRole.CAREGIVER));
         testData.performedTask(client, hourly, LocalDateTime.of(2027, 1, 5, 8, 0), 60);

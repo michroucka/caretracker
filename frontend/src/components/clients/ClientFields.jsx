@@ -75,6 +75,7 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
 
     const changeSupportedHousing = (housingId) => {
         const housing = supportedHousings.find((candidate) => candidate.id === housingId);
+        if (!housing) return;
         onChange("supportedHousingId", housingId);
         onChange("street", housing.street);
         onChange("city", housing.city);
@@ -180,7 +181,7 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                             <Select value={values.supportedHousingId ? String(values.supportedHousingId) : ""} onValueChange={(id) => changeSupportedHousing(Number(id))} disabled={disabled}>
                                 <SelectTrigger {...controlProps} className="w-full"><SelectValue placeholder="Vyberte dům" /></SelectTrigger>
                                 <SelectContent>
-                                    {supportedHousings.filter((housing) => housing.active).map((housing) => <SelectItem key={housing.id} value={String(housing.id)}>{housing.name}</SelectItem>)}
+                                    {supportedHousings.filter((housing) => housing.active || housing.id === values.supportedHousingId).map((housing) => <SelectItem key={housing.id} value={String(housing.id)}>{housing.active ? housing.name : `${housing.name} (ukončený)`}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         )}

@@ -53,7 +53,7 @@ const ACCOMMODATION = {
 const TERMINATED_MARIE = { ...MARIE, active: false, terminationDate: '2026-10-31', terminationReason: 'EXITUS' };
 
 /** Serves the client from a variable, so a reload after an action shows what the server changed. */
-function serveClient(initialClient) {
+function serveClient(initialClient, { housingActive = true } = {}) {
     let storedClient = initialClient;
     server.use(
         http.get(apiUrl('/clients/:id'), () => HttpResponse.json(storedClient)),
@@ -62,7 +62,7 @@ function serveClient(initialClient) {
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
         http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([{ id: 1, name: 'Plzeň' }])),
         http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([
-            { id: 5, name: 'DPS Slovany', street: 'Americká 12', city: 'Plzeň', postalCode: '30100', active: true },
+            { id: 5, name: 'DPS Slovany', street: 'Americká 12', city: 'Plzeň', postalCode: '30100', active: housingActive },
         ])),
     );
     const listReloads = serveAndRecord('get', '/clients', () => HttpResponse.json([]));
@@ -249,6 +249,20 @@ describe('ClientDetail – edit', () => {
 
         await waitFor(() => expect(updates).toHaveLength(1));
         expect(updates[0].body).toMatchObject({ accommodationType: 'SUPPORTED_HOUSING', supportedHousingId: 5, lockCode: '9999', travelDistanceKm: 12, hasElevator: true });
+    });
+
+    it('keeps a terminated house of the client in the form and saves without choosing another', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION }, { housingActive: false });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+
+        await waitFor(() => expect(screen.getByLabelText(/^Dům s pečovatelskou službou/)).toHaveTextContent('DPS Slovany (ukončený)'));
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body.supportedHousingId).toBe(5);
     });
 
     it('does not save an invalid form', async () => {

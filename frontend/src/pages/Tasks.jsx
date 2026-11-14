@@ -1,7 +1,8 @@
 import React from "react";
-import { IconBan, IconCircleCheck, IconDots, IconLayoutSidebarRightExpand, IconPlus, IconUser, IconUsers } from "@tabler/icons-react";
+import { IconBan, IconCircleCheck, IconDots, IconDownload, IconLayoutSidebarRightExpand, IconPlus, IconUser, IconUsers } from "@tabler/icons-react";
 import { useAuth } from "../contexts/AuthContext.tsx";
 import { useTasks } from "../hooks/useTasks.jsx";
+import { useStatutoryTasks } from "../hooks/useStatutoryTasks.jsx";
 import { useDetailParam } from "../hooks/useDetailParam";
 import { useRecordDetail } from "../hooks/useRecordDetail";
 import { useListFilters } from "../hooks/useListFilters";
@@ -16,6 +17,7 @@ import { TablePagination } from "@/components/data/TablePagination";
 import { StatusBadge } from "@/components/data/StatusBadge";
 import { pluralize } from "@/components/dashboard/dashboardFormat";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { StatutoryImportDialog } from "@/components/tasks/StatutoryImportDialog";
 import { TaskCreateDialog } from "@/components/tasks/TaskCreateDialog";
 import { TaskSheet } from "@/components/tasks/TaskSheet";
 import { formatTaskPrice, unitTypeLabel } from "@/components/tasks/taskForm";
@@ -32,9 +34,11 @@ function Tasks() {
     const { search, setSearch, statusFilter, setStatusFilter, apiStatus } = useListFilters();
     const { detailId, openDetail, closeDetail } = useDetailParam();
     const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+    const [isImportOpen, setIsImportOpen] = React.useState(false);
     const [confirmAction, setConfirmAction] = React.useState(null);
 
     const { tasks, setTasks, loading, fetchTasks, fetchTask, createTask, updateTask, terminateTask, activateTask } = useTasks();
+    const { statutoryTasks, fetchStatutoryTasks, importStatutoryTasks } = useStatutoryTasks();
     const [detail, setDetail] = useRecordDetail(detailId, fetchTask, closeDetail);
 
     const needsOrganization = user.role === ROLES.SUPERADMIN && !superadminOrg;
@@ -48,6 +52,7 @@ function Tasks() {
             return;
         }
         fetchTasks({ organizationId, status });
+        if (canEdit) fetchStatutoryTasks(organizationId);
         // refetch when the organization or the status filter changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [organizationId, status, needsOrganization]);
@@ -70,6 +75,12 @@ function Tasks() {
         if (detail?.id === task.id) setDetail(await fetchTask(task.id));
     };
 
+    const importTasks = async (statutoryTaskIds) => {
+        await importStatutoryTasks(organizationId, statutoryTaskIds);
+        fetchTasks({ organizationId, status }, { silent: true });
+        fetchStatutoryTasks(organizationId);
+    };
+
     const saveTask = async (id, request) => {
         const updated = await updateTask(id, request);
         setDetail(updated ?? await fetchTask(id));
@@ -84,7 +95,12 @@ function Tasks() {
             <PageHeader
                 title="Úkony"
                 description="Katalog služeb, které pečovatelé zapisují a které se klientům účtují."
-                actions={canEdit && !needsOrganization && <Button onClick={() => setIsCreateOpen(true)}><IconPlus /> Nový úkon</Button>}
+                actions={canEdit && !needsOrganization && (
+                    <>
+                        <Button variant="outline" onClick={() => setIsImportOpen(true)}><IconDownload /> Načíst úkony z vyhlášky</Button>
+                        <Button onClick={() => setIsCreateOpen(true)}><IconPlus /> Nový úkon</Button>
+                    </>
+                )}
             />
 
             <ListToolbar
@@ -122,7 +138,10 @@ function Tasks() {
                             onClick={() => openDetail(task.id)}
                             className={cn("cursor-pointer", !task.active && "text-muted-foreground")}
                         >
-                            <TableCell className="font-medium">{task.name}</TableCell>
+                            <TableCell className="font-medium">
+                                {task.name}
+                                {task.statutoryTaskName && <span className="block text-xs font-normal text-muted-foreground">{task.statutoryTaskName}</span>}
+                            </TableCell>
                             <TableCell className="@max-xl/table:hidden">{unitTypeLabel(task.unitType)}</TableCell>
                             <TableCell className="@max-3xl/table:hidden">
                                 {task.doubleMeeting
@@ -161,12 +180,14 @@ function Tasks() {
                 isLoading={detailId != null && !detail}
                 canEdit={canEdit}
                 organizationId={organizationId}
+                statutoryTasks={statutoryTasks}
                 onSave={saveTask}
                 onTerminate={() => askTerminate(detail)}
                 onActivate={() => askActivate(detail)}
             />
 
-            {canEdit && <TaskCreateDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} onCreate={createTask} organizationId={organizationId} />}
+            {canEdit && <TaskCreateDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} onCreate={createTask} organizationId={organizationId} statutoryTasks={statutoryTasks} />}
+            {canEdit && <StatutoryImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} statutoryTasks={statutoryTasks} onImport={importTasks} />}
 
             <ConfirmDialog
                 open={confirmAction != null}

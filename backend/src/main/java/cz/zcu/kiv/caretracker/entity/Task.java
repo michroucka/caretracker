@@ -34,6 +34,11 @@ public class Task {
     @Column(name = "active", nullable = false)
     private Boolean active = Boolean.TRUE;
 
+    /** Item of the statutory catalog the task bills, which caps its price; null for the organization's own tasks. */
+    @ManyToOne
+    @JoinColumn(name = "statutory_task_id")
+    private StatutoryTask statutoryTask;
+
     @ManyToOne
     @JoinColumn(name = "organization_id", nullable = false)
     @JsonIgnore

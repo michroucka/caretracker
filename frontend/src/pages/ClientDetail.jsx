@@ -9,10 +9,11 @@ import { useEmployees } from "../hooks/useEmployees.jsx";
 import { useTasks } from "../hooks/useTasks.jsx";
 import { useRecordForm } from "../hooks/useRecordForm";
 import { ROLES } from "../constants/roles.js";
-import { benefitsOptions, genderTranslations, terminationReasonOptions } from "../constants/clientConstants.js";
-import { formatDate } from "../utils/formatters.js";
+import { accessMethodOptions, accommodationTypeOptions, benefitsOptions, genderTranslations, terminationReasonOptions } from "../constants/clientConstants.js";
+import { formatClientName, formatDate } from "../utils/formatters.js";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { pictureUrl } from "@/lib/pictures";
+import { ClientDocuments } from "@/components/clients/ClientDocuments";
 import { ClientFields } from "@/components/clients/ClientFields";
 import { ClientTerminateDialog } from "@/components/clients/ClientTerminateDialog";
 import { toFormValues, toRequest, validateClient } from "@/components/clients/clientForm";
@@ -64,7 +65,7 @@ function DetailCard({ title, action, children }) {
     );
 }
 
-function ClientView({ client, onShowMap }) {
+function ClientView({ client, onShowMap, canViewDocuments }) {
     const hasLocation = client.latitude != null && client.longitude != null;
     const tasks = client.tasks ?? [];
 
@@ -82,6 +83,15 @@ function ClientView({ client, onShowMap }) {
                     </dl>
                 </DetailCard>
 
+                {!client.legallyCompetent && (
+                    <DetailCard title="Opatrovník">
+                        <dl className="grid gap-4 sm:grid-cols-2">
+                            <DetailItem label="Opatrovník">{client.guardianName}</DetailItem>
+                            <DetailItem label="Kontakt na opatrovníka">{client.guardianContact}</DetailItem>
+                        </dl>
+                    </DetailCard>
+                )}
+
                 <DetailCard
                     title="Adresa a kontakt"
                     action={hasLocation && <Button variant="outline" size="sm" onClick={onShowMap}><IconMapPin /> Na mapě</Button>}
@@ -93,6 +103,9 @@ function ClientView({ client, onShowMap }) {
                         <DetailItem label="Telefon">
                             {client.phone && <a href={`tel:${client.phone.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">{client.phone}</a>}
                         </DetailItem>
+                        <DetailItem label="Druhý telefon">
+                            {client.phone2 && <a href={`tel:${client.phone2.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">{client.phone2}</a>}
+                        </DetailItem>
                         <DetailItem label="E-mail">
                             {client.email && <a href={`mailto:${client.email}`} className="break-all underline-offset-4 hover:underline">{client.email}</a>}
                         </DetailItem>
@@ -100,6 +113,25 @@ function ClientView({ client, onShowMap }) {
                         <DetailItem label="Praktický lékař">{client.generalPractitioner}</DetailItem>
                     </dl>
                 </DetailCard>
+
+                <DetailCard title="Ubytování">
+                    <dl className="grid gap-4 sm:grid-cols-2">
+                        <DetailItem label="Druh ubytování">{optionName(accommodationTypeOptions, client.accommodationType)}</DetailItem>
+                        {client.supportedHousing && <DetailItem label="Dům s pečovatelskou službou">{client.supportedHousing.name}</DetailItem>}
+                        <DetailItem label="Patro nebo pokoj">{client.floorOrRoom}</DetailItem>
+                        <DetailItem label="Výtah v domě">{client.hasElevator == null ? null : client.hasElevator ? "Ano" : "Ne"}</DetailItem>
+                        <DetailItem label="Přístup do bytu">{optionName(accessMethodOptions, client.accessMethod)}</DetailItem>
+                        <DetailItem label="Kód od zámku">{client.lockCode}</DetailItem>
+                        <DetailItem label="Poznámka k přístupu" className="sm:col-span-2">{client.accessNote}</DetailItem>
+                        <DetailItem label="Dojezdová vzdálenost">{client.travelDistanceKm != null && <span className="tabular-nums">{client.travelDistanceKm} km</span>}</DetailItem>
+                    </dl>
+                </DetailCard>
+
+                {canViewDocuments && (
+                    <DetailCard title="Dokumenty">
+                        <ClientDocuments clientId={client.id} canModify={client.active} />
+                    </DetailCard>
+                )}
 
                 <DetailCard title="Poznámky">
                     {client.notes
@@ -115,6 +147,19 @@ function ClientView({ client, onShowMap }) {
                         <DetailItem label="Klíčový pracovník">{client.caregiver?.fullName}</DetailItem>
                         <DetailItem label="Příspěvek na péči">{optionName(benefitsOptions, client.benefits)}</DetailItem>
                         <DetailItem label="Klientem od">{client.created && <span className="tabular-nums">{formatDate(client.created)}</span>}</DetailItem>
+                    </dl>
+                </DetailCard>
+
+                <DetailCard title="Smlouva">
+                    <dl className="grid gap-4">
+                        <DetailItem label="Smlouva od">{client.contractFrom && <span className="tabular-nums">{formatDate(client.contractFrom)}</span>}</DetailItem>
+                        <DetailItem label="Doba smlouvy">
+                            {client.contractIndefinite ? "Neurčitá" : <span className="tabular-nums">Určitá, do {formatDate(client.contractTo)}</span>}
+                        </DetailItem>
+                        <DetailItem label="Péče od">{client.careFrom && <span className="tabular-nums">{formatDate(client.careFrom)}</span>}</DetailItem>
+                        <DetailItem label="Péče do">{client.careTo && <span className="tabular-nums">{formatDate(client.careTo)}</span>}</DetailItem>
+                        <DetailItem label="Vstupní šetření">{client.intakeAssessmentDate && <span className="tabular-nums">{formatDate(client.intakeAssessmentDate)}</span>}</DetailItem>
+                        <DetailItem label="Bez úhrady">{client.noCharge ? "Ano" : "Ne"}</DetailItem>
                     </dl>
                 </DetailCard>
 
@@ -228,7 +273,9 @@ export function ClientDetail() {
         );
     }
 
-    const fullName = `${client.firstName} ${client.lastName}`;
+    const canViewDocuments = [ROLES.SUPERADMIN, ROLES.ADMIN].includes(user.role)
+        || (user.role === ROLES.COORDINATOR && user.departmentId === client.department?.id);
+    const fullName = formatClientName(client);
     const address = `${client.street}, ${client.postalCode} ${client.city}`;
 
     return (
@@ -300,7 +347,7 @@ export function ClientDetail() {
                             </div>
                         </form>
                     ) : (
-                        <ClientView client={client} onShowMap={() => setDialog("map")} />
+                        <ClientView client={client} onShowMap={() => setDialog("map")} canViewDocuments={canViewDocuments} />
                     )}
                 </AnimatedPanel>
             </AnimatePresence>

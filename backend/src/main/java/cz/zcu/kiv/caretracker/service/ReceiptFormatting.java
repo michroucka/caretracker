@@ -2,10 +2,13 @@ package cz.zcu.kiv.caretracker.service;
 
 import cz.zcu.kiv.caretracker.entity.Organization;
 import cz.zcu.kiv.caretracker.entity.PerformedTask;
+import cz.zcu.kiv.caretracker.entity.StatutoryHourlyLimit;
 import cz.zcu.kiv.caretracker.entity.Task;
 import cz.zcu.kiv.caretracker.enums.UnitType;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,39 +24,92 @@ final class ReceiptFormatting {
     private ReceiptFormatting() {
     }
 
-    static int totalPrice(List<PerformedTask> tasks) {
-        return tasks.stream().mapToInt(PerformedTask::calculatePrice).sum();
-    }
-
-    /** Year, month and client's personal number: November 2026 for client 123 → "2611000123". */
-    static String variableSymbol(Long personalNumber, int month, int year) {
-        return String.format("%02d%02d%06d", year % 100, month, personalNumber);
+    /** Part of a performed task billed at one unit price; a record crossing the monthly threshold has two. */
+    record BillingLine(PerformedTask record, double unitCount, int unitPrice) {
+        int price() {
+            return PerformedTask.price(unitCount, unitPrice, record.getTask().getUnitType());
+        }
     }
 
     /**
-     * Groups performed tasks by task type and stored unit price and aggregates unit counts and prices per group
-     * for use as rows in the receipt template, in the order the groups first appear. A price change within
-     * the month gives the task a second row with the new rate.
+     * Turns one client's records of one calendar month into billing lines. Hours of tasks linked to the statutory
+     * catalog are counted in the order of the record dates; minutes beyond the monthly threshold are billed at
+     * {@code min(unit price, reduced maximum)} (decree 505/2006 Sb., § 6 odst. 2 písm. a). Without a limit, or for
+     * other tasks, every record is one line at its stored price.
+     *
+     * @param records the client's records of the month
+     * @param limit the statutory hourly limit, or null for none
+     * @return billing lines, in date order when a limit applies
      */
-    static List<Map<String, String>> groupByTask(List<PerformedTask> tasks) {
-        return tasks.stream()
+    static List<BillingLine> billingLines(List<PerformedTask> records, StatutoryHourlyLimit limit) {
+        if (limit == null) {
+            return records.stream().map(record -> new BillingLine(record, record.getUnitCount(), record.getUnitPrice())).toList();
+        }
+        double minutesLeftUnderThreshold = limit.getMonthlyHoursThreshold() * 60.0;
+        int reducedPrice = limit.getMaxUnitPriceOverThreshold();
+        List<BillingLine> lines = new ArrayList<>();
+        List<PerformedTask> byDate = records.stream()
+                .sorted(Comparator.comparing(PerformedTask::getDate, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(PerformedTask::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .toList();
+        for (PerformedTask record : byDate) {
+            if (!countsTowardsThreshold(record)) {
+                lines.add(new BillingLine(record, record.getUnitCount(), record.getUnitPrice()));
+                continue;
+            }
+            double underThreshold = Math.min(record.getUnitCount(), minutesLeftUnderThreshold);
+            double overThreshold = record.getUnitCount() - underThreshold;
+            minutesLeftUnderThreshold -= underThreshold;
+            if (overThreshold == 0 || record.getUnitPrice() <= reducedPrice) {
+                lines.add(new BillingLine(record, record.getUnitCount(), record.getUnitPrice()));
+                continue;
+            }
+            if (underThreshold > 0) {
+                lines.add(new BillingLine(record, underThreshold, record.getUnitPrice()));
+            }
+            lines.add(new BillingLine(record, overThreshold, reducedPrice));
+        }
+        return lines;
+    }
+
+    private static boolean countsTowardsThreshold(PerformedTask record) {
+        Task task = record.getTask();
+        return task.getUnitType() == UnitType.HOUR && task.getStatutoryTask() != null;
+    }
+
+    static int totalPrice(List<BillingLine> lines) {
+        return lines.stream().mapToInt(BillingLine::price).sum();
+    }
+
+    /** Year, month and client's six-digit personal number: November 2026 for client 010042 → "2611010042". */
+    static String variableSymbol(String personalNumber, int month, int year) {
+        return String.format("%02d%02d%s", year % 100, month, personalNumber);
+    }
+
+    /**
+     * Groups billing lines by task type and unit price and aggregates unit counts and prices per group
+     * for use as rows in the receipt template, in the order the groups first appear. A price change within
+     * the month, or hours over the statutory monthly threshold, give the task a second row with the other rate.
+     */
+    static List<Map<String, String>> groupByTask(List<BillingLine> lines) {
+        return lines.stream()
                 .collect(Collectors.groupingBy(
-                        t -> List.of(t.getTask().getId(), t.getUnitPrice()),
+                        line -> List.of(line.record().getTask().getId(), line.unitPrice()),
                         LinkedHashMap::new,
                         Collectors.toList()
                 ))
                 .values().stream()
                 .map(group -> {
-                    PerformedTask first = group.get(0);
-                    Task task = first.getTask();
+                    BillingLine first = group.get(0);
+                    Task task = first.record().getTask();
                     double totalUnitCount = group.stream()
-                            .mapToDouble(PerformedTask::getUnitCount).sum();
+                            .mapToDouble(BillingLine::unitCount).sum();
 
                     Map<String, String> row = new HashMap<>();
                     row.put("taskName", task.getName());
                     row.put("recordCount", String.valueOf(group.size()));
                     row.put("amount", formatAmount(totalUnitCount, task.getUnitType()));
-                    row.put("rate", formatRate(task.getUnitType(), first.getUnitPrice()));
+                    row.put("rate", formatRate(task.getUnitType(), first.unitPrice()));
                     row.put("price", formatCurrency(totalPrice(group)));
                     return row;
                 })

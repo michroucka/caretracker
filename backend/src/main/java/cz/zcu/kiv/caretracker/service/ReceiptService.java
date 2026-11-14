@@ -3,11 +3,13 @@ package cz.zcu.kiv.caretracker.service;
 import cz.zcu.kiv.caretracker.entity.Client;
 import cz.zcu.kiv.caretracker.entity.Department;
 import cz.zcu.kiv.caretracker.entity.PerformedTask;
+import cz.zcu.kiv.caretracker.entity.StatutoryHourlyLimit;
 import cz.zcu.kiv.caretracker.exception.ResourceNotFoundException;
 import cz.zcu.kiv.caretracker.exception.ValidationException;
 import cz.zcu.kiv.caretracker.repository.ClientRepository;
 import cz.zcu.kiv.caretracker.repository.DepartmentRepository;
 import cz.zcu.kiv.caretracker.repository.PerformedTaskRepository;
+import cz.zcu.kiv.caretracker.repository.StatutoryHourlyLimitRepository;
 import cz.zcu.kiv.caretracker.specification.PerformedTaskSpecifications;
 import cz.zcu.kiv.caretracker.service.PaymentQrClient.PaymentAccount;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +52,8 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
     private SpringTemplateEngine templateEngine;
     @Autowired
     private PaymentQrClient paymentQrClient;
+    @Autowired
+    private StatutoryHourlyLimitRepository statutoryHourlyLimitRepository;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d. M. yyyy");
     private static final Collator CZECH_COLLATOR = Collator.getInstance(Locale.forLanguageTag("cs-CZ"));
@@ -87,8 +91,10 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
         tasks.sort(Comparator.comparing(PerformedTask::getDate));
 
         String variableSymbol = variableSymbol(client, month, year);
-        String qrCode = encodeBase64(paymentQrClient.fetchPng(PaymentAccount.of(client.getOrganization()), ReceiptFormatting.totalPrice(tasks), variableSymbol));
-        return renderPdf(List.of(buildReceiptHtml(client, tasks, month, year, qrCode)));
+        List<ReceiptFormatting.BillingLine> lines = ReceiptFormatting.billingLines(tasks, hourlyLimit());
+        String qrCode = client.getNoCharge() ? null
+                : encodeBase64(paymentQrClient.fetchPng(PaymentAccount.of(client.getOrganization()), ReceiptFormatting.totalPrice(lines), variableSymbol));
+        return renderPdf(List.of(buildReceiptHtml(client, lines, month, year, qrCode)));
     }
 
     /**
@@ -121,31 +127,35 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
         Map<Long, List<PerformedTask>> tasksByClient = tasks.stream()
                 .collect(Collectors.groupingBy(t -> t.getClient().getId(), LinkedHashMap::new, Collectors.toList()));
 
-        List<List<PerformedTask>> clientGroups = tasksByClient.values().stream()
+        StatutoryHourlyLimit limit = hourlyLimit();
+        List<List<ReceiptFormatting.BillingLine>> clientGroups = tasksByClient.values().stream()
                 .sorted(Comparator.comparing((List<PerformedTask> group) -> group.get(0).getClient().getLastName(), CZECH_COLLATOR)
                         .thenComparing(group -> group.get(0).getClient().getFirstName(), CZECH_COLLATOR))
+                .map(group -> ReceiptFormatting.billingLines(group, limit))
                 .toList();
 
         // QR codes come from an external API one request per client, so they are fetched in parallel;
         // everything read from JPA entities is resolved here first, the parallel part only uses plain values
         PaymentAccount account = PaymentAccount.of(department.getOrganization());
         List<Integer> totals = clientGroups.stream().map(ReceiptFormatting::totalPrice).toList();
+        List<Boolean> withoutCharge = clientGroups.stream().map(group -> group.get(0).record().getClient().getNoCharge()).toList();
         List<String> variableSymbols = clientGroups.stream()
-                .map(group -> variableSymbol(group.get(0).getClient(), month, year))
+                .map(group -> variableSymbol(group.get(0).record().getClient(), month, year))
                 .toList();
         // own bounded pool: the blocking calls must not occupy the JVM-wide common pool
         List<String> qrCodes;
         try (ExecutorService qrFetchers = Executors.newFixedThreadPool(Math.clamp(clientGroups.size(), 1, MAX_PARALLEL_QR_REQUESTS))) {
             List<CompletableFuture<String>> pendingQrCodes = IntStream.range(0, clientGroups.size())
                     .mapToObj(index -> CompletableFuture.supplyAsync(
-                            () -> encodeBase64(paymentQrClient.fetchPng(account, totals.get(index), variableSymbols.get(index))),
+                            () -> withoutCharge.get(index) ? null
+                                    : encodeBase64(paymentQrClient.fetchPng(account, totals.get(index), variableSymbols.get(index))),
                             qrFetchers))
                     .toList();
             qrCodes = pendingQrCodes.stream().map(CompletableFuture::join).toList();
         }
 
         List<String> pages = IntStream.range(0, clientGroups.size())
-                .mapToObj(index -> buildReceiptHtml(clientGroups.get(index).get(0).getClient(), clientGroups.get(index), month, year, qrCodes.get(index)))
+                .mapToObj(index -> buildReceiptHtml(clientGroups.get(index).get(0).record().getClient(), clientGroups.get(index), month, year, qrCodes.get(index)))
                 .toList();
 
         return renderPdf(pages);
@@ -162,11 +172,12 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
     }
 
     /**
-     * Fills the receipt template for one client; `tasks` are the client's records in the month, sorted by date.
-     * `qrCode` is the Base64 payment QR image, or null when the organization has no bank account.
+     * Fills the receipt template for one client; `lines` are the billing lines of the client's records in the month.
+     * `qrCode` is the Base64 payment QR image, or null when the organization has no bank account or the client
+     * receives the service without charge (the total is then 0 and the receipt says so instead of the payment).
      */
-    private String buildReceiptHtml(Client client, List<PerformedTask> tasks, int month, int year, String qrCode) {
-        int totalPrice = ReceiptFormatting.totalPrice(tasks);
+    private String buildReceiptHtml(Client client, List<ReceiptFormatting.BillingLine> lines, int month, int year, String qrCode) {
+        int totalPrice = client.getNoCharge() ? 0 : ReceiptFormatting.totalPrice(lines);
         String variableSymbol = variableSymbol(client, month, year);
 
         Context context = new Context();
@@ -178,11 +189,12 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
         context.setVariable("clientCity", client.getPostalCode() + " " + client.getCity());
         context.setVariable("monthYear", MONTH_NAMES[month - 1] + " " + year);
         context.setVariable("issuedDate", LocalDate.now().format(DATE_FMT));
-        context.setVariable("tasks", ReceiptFormatting.groupByTask(tasks));
+        context.setVariable("tasks", ReceiptFormatting.groupByTask(lines));
         context.setVariable("totalPrice", ReceiptFormatting.formatCurrency(totalPrice));
         context.setVariable("accountNumber", ReceiptFormatting.formatAccountNumber(client.getOrganization()));
         context.setVariable("variableSymbol", variableSymbol);
         context.setVariable("qrCode", qrCode);
+        context.setVariable("noCharge", client.getNoCharge());
         context.setVariable("logoUrl", getClass().getClassLoader().getResource("images/lockup-horizontal-color.png").toString());
 
         return templateEngine.process("receipt/performed-task-receipt", context);
@@ -224,7 +236,7 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
 
     /**
      * Generates a standalone payment QR code PNG for a client's monthly billing total.
-     * Returns {@code null} if the organization has no bank account configured.
+     * Returns {@code null} if the organization has no bank account configured or the client receives the service without charge.
      *
      * @param clientId the client ID
      * @param month the billing month (1–12)
@@ -242,10 +254,18 @@ public class ReceiptService extends BaseRoleFilteringService<PerformedTask, Void
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new ResourceNotFoundException("Klient nebyl nalezen"));
 
-        int totalPrice = ReceiptFormatting.totalPrice(performedTaskRepository.findAll(
-                PerformedTaskSpecifications.withFilters(client.getOrganization().getId(), null, null, clientId, month, year)));
+        if (client.getNoCharge()) {
+            return null;
+        }
+
+        int totalPrice = ReceiptFormatting.totalPrice(ReceiptFormatting.billingLines(performedTaskRepository.findAll(
+                PerformedTaskSpecifications.withFilters(client.getOrganization().getId(), null, null, clientId, month, year)), hourlyLimit()));
 
         return paymentQrClient.fetchPng(PaymentAccount.of(client.getOrganization()), totalPrice, variableSymbol(client, month, year));
+    }
+
+    private StatutoryHourlyLimit hourlyLimit() {
+        return statutoryHourlyLimitRepository.findFirstByOrderByIdAsc().orElse(null);
     }
 
     private static String encodeBase64(byte[] bytes) {

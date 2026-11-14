@@ -38,8 +38,8 @@ class ClientAccessIT extends AbstractIntegrationTest {
 
     private static final Set<Actor> CLIENT_DEPARTMENT_STAFF = EnumSet.of(SUPERADMIN, ADMIN, COORDINATOR, CAREGIVER_OF_CLIENT, CAREGIVER);
     private static final Set<Actor> CLIENT_MANAGERS = EnumSet.of(SUPERADMIN, ADMIN, COORDINATOR);
-    // individual plan content may be changed only by the client's own caregiver (or admins), not the coordinator
-    private static final Set<Actor> PLAN_EDITORS = EnumSet.of(SUPERADMIN, ADMIN, CAREGIVER_OF_CLIENT);
+    // individual plan content may be changed by the client's own caregiver, the coordinator of the client's department and admins
+    private static final Set<Actor> PLAN_EDITORS = EnumSet.of(SUPERADMIN, ADMIN, COORDINATOR, CAREGIVER_OF_CLIENT);
     // daily records need an employee as author, so SUPERADMIN cannot add them
     private static final Set<Actor> DAILY_RECORD_AUTHORS = EnumSet.of(ADMIN, COORDINATOR, CAREGIVER_OF_CLIENT, CAREGIVER);
     // a daily record may be deleted by its author (here CAREGIVER_OF_CLIENT) or an admin

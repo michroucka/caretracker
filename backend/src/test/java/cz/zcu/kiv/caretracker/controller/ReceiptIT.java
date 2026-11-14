@@ -7,11 +7,16 @@ import cz.zcu.kiv.caretracker.entity.Organization;
 import cz.zcu.kiv.caretracker.entity.Task;
 import cz.zcu.kiv.caretracker.entity.User;
 import cz.zcu.kiv.caretracker.enums.EmployeeRole;
+import cz.zcu.kiv.caretracker.enums.UnitType;
 import cz.zcu.kiv.caretracker.repository.ClientRepository;
 import cz.zcu.kiv.caretracker.repository.OrganizationRepository;
+import cz.zcu.kiv.caretracker.repository.StatutoryTaskRepository;
+import cz.zcu.kiv.caretracker.repository.TaskRepository;
 import cz.zcu.kiv.caretracker.service.PaymentQrClient.PaymentAccount;
 import cz.zcu.kiv.caretracker.support.AbstractIntegrationTest;
 import cz.zcu.kiv.caretracker.support.TestImages;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +57,12 @@ class ReceiptIT extends AbstractIntegrationTest {
     @Autowired
     private ClientRepository clientRepository;
 
+    @Autowired
+    private TaskRepository taskRepository;
+
+    @Autowired
+    private StatutoryTaskRepository statutoryTaskRepository;
+
     private Department department;
     private Employee coordinator;
     private Employee caregiver;
@@ -71,7 +82,7 @@ class ReceiptIT extends AbstractIntegrationTest {
         task = testData.task(organization);
     }
 
-    private Client client(String lastName, long personalNumber) {
+    private Client client(String lastName, String personalNumber) {
         Client client = testData.client(caregiver);
         client.setLastName(lastName);
         client.setPersonalNumber(personalNumber);
@@ -86,7 +97,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void clientReceiptAsksForQrCodeWithTotalOfTheMonthOnly() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
         records(client, NOVEMBER_FIRST_MORNING, NOVEMBER_LAST_EVENING, OCTOBER_LAST_EVENING, DECEMBER_FIRST_MORNING);
         when(paymentQrClient.fetchPng(ACCOUNT, 300, "2611000123")).thenReturn(TestImages.jpeg(16, 16));
 
@@ -104,8 +115,27 @@ class ReceiptIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void hoursOverEightyInTheMonthAreBilledAtReducedStatutoryRate() throws Exception {
+        Client client = client("Novák", "000123");
+        Task dressing = testData.task(task.getOrganization(), UnitType.HOUR, 165);
+        dressing.setStatutoryTask(statutoryTaskRepository.findByCode("a3").orElseThrow());
+        taskRepository.save(dressing);
+        testData.performedTask(client, dressing, NOVEMBER_FIRST_MORNING, 79 * 60);
+        testData.performedTask(client, dressing, NOVEMBER_FIRST_MORNING.plusDays(1), 2 * 60);
+
+        mockMvc.perform(get("/api/performed-tasks/receipt")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(caregiver)))
+                .andExpect(status().isOk());
+
+        verify(paymentQrClient).fetchPng(ACCOUNT, 80 * 165 + 145, "2611000123");
+    }
+
+    @Test
     void clientReceiptIsProducedWithoutQrCode() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
         records(client, NOVEMBER_FIRST_MORNING);
         when(paymentQrClient.fetchPng(any(), anyInt(), anyString())).thenReturn(null);
 
@@ -120,7 +150,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void clientReceiptForMonthWithoutRecordsAsksForZeroAmount() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
 
         mockMvc.perform(get("/api/performed-tasks/receipt")
                         .param("clientId", client.getId().toString())
@@ -134,7 +164,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void receiptForInvalidMonthIsRejected() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
 
         mockMvc.perform(get("/api/performed-tasks/receipt")
                         .param("clientId", client.getId().toString())
@@ -147,9 +177,9 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void departmentReceiptsAskForOneQrCodePerClientWithRecordsInTheMonth() throws Exception {
-        Client novak = client("Novák", 101);
-        Client dvorak = client("Dvořák", 102);
-        Client withoutNovemberRecord = client("Zeman", 103);
+        Client novak = client("Novák", "000101");
+        Client dvorak = client("Dvořák", "000102");
+        Client withoutNovemberRecord = client("Zeman", "000103");
         records(novak, NOVEMBER_FIRST_MORNING);
         records(dvorak, NOVEMBER_FIRST_MORNING, NOVEMBER_LAST_EVENING, NOVEMBER_LAST_EVENING);
         records(withoutNovemberRecord, OCTOBER_LAST_EVENING);
@@ -171,7 +201,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void departmentReceiptsForMonthWithoutRecordsAreNotFound() throws Exception {
-        records(client("Novák", 101), OCTOBER_LAST_EVENING);
+        records(client("Novák", "000101"), OCTOBER_LAST_EVENING);
 
         mockMvc.perform(get("/api/performed-tasks/receipts")
                         .param("departmentId", department.getId().toString())
@@ -186,7 +216,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void clientGetsPaymentQrCodeForTheMonthTotal() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
         User account = testData.clientAccount(client);
         records(client, NOVEMBER_FIRST_MORNING, NOVEMBER_LAST_EVENING, DECEMBER_FIRST_MORNING);
         byte[] image = TestImages.jpeg(16, 16);
@@ -204,7 +234,7 @@ class ReceiptIT extends AbstractIntegrationTest {
 
     @Test
     void paymentQrCodeIsNoContentWhenUnavailable() throws Exception {
-        Client client = client("Novák", 123);
+        Client client = client("Novák", "000123");
         User account = testData.clientAccount(client);
         records(client, NOVEMBER_FIRST_MORNING);
         when(paymentQrClient.fetchPng(any(), anyInt(), anyString())).thenReturn(null);
@@ -215,5 +245,73 @@ class ReceiptIT extends AbstractIntegrationTest {
                         .param("year", "2026")
                         .with(loggedInAs(account)))
                 .andExpect(status().isNoContent());
+    }
+
+    private Client clientWithoutCharge(String lastName, String personalNumber) {
+        Client client = client(lastName, personalNumber);
+        client.setNoCharge(true);
+        return clientRepository.save(client);
+    }
+
+    private String receiptText(byte[] pdf) throws Exception {
+        PdfReader reader = new PdfReader(pdf);
+        PdfTextExtractor extractor = new PdfTextExtractor(reader);
+        StringBuilder text = new StringBuilder();
+        for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+            text.append(extractor.getTextFromPage(page)).append('\n');
+        }
+        return text.toString();
+    }
+
+    @Test
+    void clientReceiptWithoutChargeHasZeroTotalAndNoPayment() throws Exception {
+        Client client = clientWithoutCharge("Novák", "000123");
+        records(client, NOVEMBER_FIRST_MORNING);
+
+        byte[] pdf = mockMvc.perform(get("/api/performed-tasks/receipt")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(caregiver)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String text = receiptText(pdf);
+        assertThat(text).contains(task.getName()).contains("Služba je poskytována bez úhrady");
+        assertThat(text).containsPattern("Celkem k úhradě[\\s\\u00A0]*0[\\s\\u00A0]+Kč");
+        assertThat(text).doesNotContain("Variabilní symbol");
+        verify(paymentQrClient, never()).fetchPng(any(), anyInt(), anyString());
+    }
+
+    @Test
+    void departmentReceiptsAskForQrCodeOnlyForClientsWithCharge() throws Exception {
+        records(clientWithoutCharge("Novák", "000101"), NOVEMBER_FIRST_MORNING);
+        records(client("Dvořák", "000102"), NOVEMBER_FIRST_MORNING);
+
+        mockMvc.perform(get("/api/performed-tasks/receipts")
+                        .param("departmentId", department.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(coordinator)))
+                .andExpect(status().isOk());
+
+        verify(paymentQrClient).fetchPng(ACCOUNT, 150, "2611000102");
+        verifyNoMoreInteractions(paymentQrClient);
+    }
+
+    @Test
+    void paymentQrCodeOfClientWithoutChargeIsNoContent() throws Exception {
+        Client client = clientWithoutCharge("Novák", "000123");
+        User account = testData.clientAccount(client);
+        records(client, NOVEMBER_FIRST_MORNING);
+
+        mockMvc.perform(get("/api/performed-tasks/payment-qr")
+                        .param("clientId", client.getId().toString())
+                        .param("month", "11")
+                        .param("year", "2026")
+                        .with(loggedInAs(account)))
+                .andExpect(status().isNoContent());
+
+        verify(paymentQrClient, never()).fetchPng(any(), anyInt(), anyString());
     }
 }

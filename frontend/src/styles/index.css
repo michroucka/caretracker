@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@custom-variant dark (&:is(.dark *));
+
+/* Printed pages stay light even when the app is in dark mode. */
+@custom-variant dark {
+    @media screen {
+        &:is(.dark *) {
+            @slot;
+        }
+    }
+}
 
 /* Semantic tokens follow shadcn naming. */
 :root {
@@ -52,53 +60,55 @@
     --sidebar-ring: #E26A35;
 }
 
-.dark {
-    --background: #17131C;
-    --foreground: #F1EDF5;
-    --card: #211B28;
-    --card-foreground: #F1EDF5;
-    --popover: #211B28;
-    --popover-foreground: #F1EDF5;
-    --primary: #C2A4D6;
-    --primary-foreground: #1E1A24;
-    --primary-hover: #DAC7E6;
-    --secondary: #3B2D4A;
-    --secondary-foreground: #F1EDF5;
-    --secondary-hover: #4A3A5C;
-    --muted: #2A2332;
-    --muted-foreground: #A79EB2;
-    --accent: #332A3D;
-    --accent-foreground: #F1EDF5;
-    --highlight: #E78255;
-    --brand-panel: #170F1D;
-    --highlight-foreground: #1E1A24;
-    --destructive: #DE8292;
-    --destructive-foreground: #1E1A24;
-    --destructive-hover: #E7A5B0;
-    --success: #6DB18F;
-    --warning: #EFCE71;
-    --success-soft: #2D3338;
-    --success-soft-foreground: #6DB18F;
-    --warning-soft: #423834;
-    --warning-soft-foreground: #EFCE71;
-    --danger-soft: #3F2B39;
-    --danger-soft-foreground: #DE8292;
-    --pending-soft: #412B2F;
-    --pending-soft-foreground: #E78255;
-    --border: #352D3E;
-    --input: #352D3E;
-    --ring: #E78255;
+@media screen {
+    .dark {
+        --background: #17131C;
+        --foreground: #F1EDF5;
+        --card: #211B28;
+        --card-foreground: #F1EDF5;
+        --popover: #211B28;
+        --popover-foreground: #F1EDF5;
+        --primary: #C2A4D6;
+        --primary-foreground: #1E1A24;
+        --primary-hover: #DAC7E6;
+        --secondary: #3B2D4A;
+        --secondary-foreground: #F1EDF5;
+        --secondary-hover: #4A3A5C;
+        --muted: #2A2332;
+        --muted-foreground: #A79EB2;
+        --accent: #332A3D;
+        --accent-foreground: #F1EDF5;
+        --highlight: #E78255;
+        --brand-panel: #170F1D;
+        --highlight-foreground: #1E1A24;
+        --destructive: #DE8292;
+        --destructive-foreground: #1E1A24;
+        --destructive-hover: #E7A5B0;
+        --success: #6DB18F;
+        --warning: #EFCE71;
+        --success-soft: #2D3338;
+        --success-soft-foreground: #6DB18F;
+        --warning-soft: #423834;
+        --warning-soft-foreground: #EFCE71;
+        --danger-soft: #3F2B39;
+        --danger-soft-foreground: #DE8292;
+        --pending-soft: #412B2F;
+        --pending-soft-foreground: #E78255;
+        --border: #352D3E;
+        --input: #352D3E;
+        --ring: #E78255;
 
-    --sidebar: #110D15;
-    --sidebar-foreground: #C9C0D3;
-    --sidebar-primary: #C2A4D6;
-    --sidebar-primary-foreground: #1E1A24;
-    --sidebar-accent: #211B28;
-    --sidebar-accent-foreground: #F1EDF5;
-    --sidebar-active: #2A2332;
-    --sidebar-active-foreground: #F1EDF5;
-    --sidebar-border: #2A2332;
-    --sidebar-ring: #E78255;
+        --sidebar: #110D15;
+        --sidebar-foreground: #C9C0D3;
+        --sidebar-primary: #C2A4D6;
+        --sidebar-primary-foreground: #1E1A24;
+        --sidebar-accent: #211B28;
+        --sidebar-accent-foreground: #F1EDF5;
+        --sidebar-active: #2A2332;
+        --sidebar-active-foreground: #F1EDF5;
+        --sidebar-border: #2A2332;
+        --sidebar-ring: #E78255;
+    }
 }
 
 @theme inline {
@@ -281,3 +291,31 @@
     outline: none !important;
 }
 
+@media print {
+    @page {
+        size: A4;
+        margin: 15mm;
+    }
+
+    [data-slot="sidebar"] {
+        display: none;
+    }
+
+    :root {
+        --background: #FFFFFF;
+        --sidebar: #FFFFFF;
+    }
+
+    [data-slot="card"] {
+        box-shadow: none;
+    }
+
+    [data-slot="card-header"] {
+        break-after: avoid;
+    }
+
+    [data-slot="card"] section,
+    [data-slot="card"] dl > div {
+        break-inside: avoid;
+    }
+}

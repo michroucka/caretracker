@@ -1,11 +1,12 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import IndividualPlan from './IndividualPlan';
 import { renderWithProviders } from '@/test/render';
 import { apiUrl, server } from '@/test/server';
-import { caregiver } from '@/test/users';
+import { caregiver, coordinator } from '@/test/users';
 
 const CAREGIVER_ID = 10;
 
@@ -18,6 +19,7 @@ function client({ active }) {
         street: 'Americká 12',
         city: 'Plzeň',
         postalCode: '301 00',
+        phone: '+420777123456',
         benefits: 'TWO',
         legallyCompetent: true,
         pictureId: null,
@@ -42,13 +44,17 @@ function serveClient(clientData, planData = plan) {
     );
 }
 
-function renderPlanAsClientsCaregiver() {
+function renderPlanAs(authStatus) {
     return renderWithProviders(
         <Routes>
             <Route path="/clients/:clientId/individual-plan" element={<IndividualPlan />} />
         </Routes>,
-        { authStatus: caregiver({ employeeId: CAREGIVER_ID }), route: '/clients/7/individual-plan' },
+        { authStatus, route: '/clients/7/individual-plan' },
     );
+}
+
+function renderPlanAsClientsCaregiver() {
+    return renderPlanAs(caregiver({ employeeId: CAREGIVER_ID }));
 }
 
 describe('IndividualPlan', () => {
@@ -60,6 +66,44 @@ describe('IndividualPlan', () => {
         expect(await screen.findByRole('button', { name: /Nová verze/ })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Přidat záznam/ })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Akce pro záznam/ })).toBeInTheDocument();
+        expect(screen.getByText('+420 777 123 456')).toBeInTheDocument();
+    });
+
+    it('shows the client name with titles in the heading and the summary', async () => {
+        serveClient({ ...client({ active: true }), firstName: 'Jana', titleBefore: 'Mgr.', titleAfter: 'DiS.' });
+
+        renderPlanAsClientsCaregiver();
+
+        expect(await screen.findByRole('link', { name: 'Mgr. Jana Nová, DiS.' })).toBeInTheDocument();
+        expect(screen.getByText('Mgr. Jana Nová, DiS.', { selector: 'dd' })).toBeInTheDocument();
+    });
+
+    it('prints the plan', async () => {
+        const user = userEvent.setup();
+        const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+        serveClient(client({ active: true }));
+
+        renderPlanAsClientsCaregiver();
+
+        await user.click(await screen.findByRole('button', { name: /Tisk/ }));
+        expect(print).toHaveBeenCalledOnce();
+    });
+
+    it("lets the coordinator of the client's department add a version", async () => {
+        serveClient(client({ active: true }));
+
+        renderPlanAs(coordinator({ employeeId: 99, departmentId: 2 }));
+
+        expect(await screen.findByRole('button', { name: /Nová verze/ })).toBeInTheDocument();
+    });
+
+    it('does not let a coordinator of another department add a version', async () => {
+        serveClient(client({ active: true }));
+
+        renderPlanAs(coordinator({ employeeId: 99, departmentId: 3 }));
+
+        expect(await screen.findByText('Procházky')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Nová verze/ })).not.toBeInTheDocument();
     });
 
     it('is read-only for a terminated client', async () => {
@@ -72,6 +116,7 @@ describe('IndividualPlan', () => {
         expect(screen.queryByRole('button', { name: /Nová verze/ })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Přidat záznam/ })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Akce pro záznam/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Tisk/ })).toBeInTheDocument();
     });
 
     it('does not offer to create a plan for a terminated client', async () => {
@@ -81,5 +126,6 @@ describe('IndividualPlan', () => {
 
         expect(await screen.findByText('Klient je ukončený, plán už nejde vytvořit.')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Vytvořit plán/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Tisk/ })).not.toBeInTheDocument();
     });
 });

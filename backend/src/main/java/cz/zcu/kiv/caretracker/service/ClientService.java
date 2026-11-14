@@ -11,6 +11,7 @@ import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanDTO;
 import cz.zcu.kiv.caretracker.dto.individualPlan.IndividualPlanVersionSummaryDTO;
 import cz.zcu.kiv.caretracker.dto.picture.PictureDTO;
 import cz.zcu.kiv.caretracker.entity.*;
+import cz.zcu.kiv.caretracker.enums.AccommodationType;
 import cz.zcu.kiv.caretracker.enums.TerminationReason;
 import cz.zcu.kiv.caretracker.enums.UserRole;
 import cz.zcu.kiv.caretracker.exception.ResourceNotFoundException;
@@ -33,10 +34,12 @@ import java.util.*;
 @Service
 public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
 
+    public static final String DUPLICATE_PERSONAL_NUMBER_MESSAGE = "Osobní číslo je už obsazené";
 
-    static final long MAX_PERSONAL_NUMBER = 999_999;
     @Autowired
     private ClientRepository clientRepository;
+    @Autowired
+    private PersonalNumberGenerator personalNumberGenerator;
     @Autowired
     private ClientMapper clientMapper;
     @Autowired
@@ -45,6 +48,8 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     private EmployeeRepository employeeRepository;
     @Autowired
     private TaskRepository taskRepository;
+    @Autowired
+    private SupportedHousingRepository supportedHousingRepository;
     @Autowired
     private IndividualPlanRepository individualPlanRepository;
     @Autowired
@@ -232,8 +237,8 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     /**
      * Persists a client entity from the supplied DTO, resolving all related entities and validating
      * that they belong to the current user's organization/department.
-     * When no personalNumber is provided, the entity is saved first so the generated ID is available,
-     * then incremented until a unique number within the organization is found.
+     * A new client without a personal number gets the next one of its department ({@link PersonalNumberGenerator}),
+     * an existing client keeps its number unless another one is sent.
      */
     private Client saveClient(Client client, ClientRequestDTO dto) {
         validateRequiredFields(dto);
@@ -258,11 +263,16 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             validateOrganizationAccess(task, t -> t.getOrganization().getId());
         }
 
+        SupportedHousing supportedHousing = resolveSupportedHousing(client, dto, department);
+        if (dto.getTravelDistanceKm() != null && dto.getTravelDistanceKm() < 0) {
+            throw new ValidationException("Dojezdová vzdálenost nesmí být záporná");
+        }
+
         boolean addressChanged = !Objects.equals(client.getStreet(), dto.getStreet())
                 || !Objects.equals(client.getCity(), dto.getCity())
                 || !Objects.equals(client.getPostalCode(), dto.getPostalCode());
 
-        clientMapper.requestToClient(client, dto, department, caregiver, tasks);
+        clientMapper.requestToClient(client, dto, department, caregiver, tasks, supportedHousing);
 
         if (addressChanged) {
             Optional<GeocodingService.GeocodeResult> result = geocodingService.geocode(client.getStreet(), client.getCity(), client.getPostalCode());
@@ -270,22 +280,44 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             client.setLongitude(result.map(GeocodingService.GeocodeResult::longitude).orElse(null));
         }
 
-        if (dto.getPersonalNumber() != null) {
-            validatePersonalNumber(dto.getPersonalNumber());
-            client.setPersonalNumber(dto.getPersonalNumber());
+        String requestedPersonalNumber = dto.getPersonalNumber() == null ? "" : dto.getPersonalNumber().trim();
+        if (!requestedPersonalNumber.isEmpty()) {
+            validatePersonalNumber(client, requestedPersonalNumber, department.getOrganization().getId());
+            client.setPersonalNumber(requestedPersonalNumber);
         } else if (client.getPersonalNumber() == null) {
-            // Save first to get the generated ID, then find the next free personal number starting from it.
-            Client savedClient = clientRepository.save(client);
-            Long organizationId = savedClient.getOrganization().getId();
-            Long personalNumber = savedClient.getId();
-            while (clientRepository.existsByPersonalNumberAndOrganizationIdAndActiveTrue(personalNumber, organizationId)) {
-                personalNumber++;
-            }
-            savedClient.setPersonalNumber(personalNumber);
-            return clientRepository.save(savedClient);
+            client.setPersonalNumber(personalNumberGenerator.next(department));
         }
 
         return clientRepository.save(client);
+    }
+
+    /**
+     * A client in supported housing lives at the address of the house, so the house's address replaces the one
+     * in the request. Other kinds of accommodation keep the typed address and no house.
+     * A terminated house cannot be newly chosen, a client already living there keeps it.
+     */
+    private SupportedHousing resolveSupportedHousing(Client client, ClientRequestDTO dto, Department department) {
+        if (!AccommodationType.SUPPORTED_HOUSING.name().equals(dto.getAccommodationType())) {
+            return null;
+        }
+        if (dto.getSupportedHousingId() == null) {
+            throw new ValidationException("Vyberte dům s pečovatelskou službou");
+        }
+
+        SupportedHousing housing = supportedHousingRepository.findById(dto.getSupportedHousingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Dům s pečovatelskou službou nebyl nalezen"));
+        if (!housing.getDepartment().getId().equals(department.getId())) {
+            throw new ValidationException("Dům s pečovatelskou službou nepatří do střediska klienta");
+        }
+        boolean alreadyLivesThere = client.getSupportedHousing() != null && client.getSupportedHousing().getId().equals(housing.getId());
+        if (!housing.getActive() && !alreadyLivesThere) {
+            throw new ValidationException("Dům s pečovatelskou službou je ukončený");
+        }
+
+        dto.setStreet(housing.getStreet());
+        dto.setCity(housing.getCity());
+        dto.setPostalCode(housing.getPostalCode());
+        return housing;
     }
 
     /**
@@ -395,14 +427,6 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         return clientRepository.save(client);
     }
 
-    /**
-     * Validates that the current user may modify a client's individual plan.
-     * SUPERADMIN and ADMIN (same organization) have full access;
-     * COORDINATOR and CAREGIVER may only edit plans for clients directly assigned to them.
-     *
-     * @param client the client whose plan is being modified
-     * @throws SecurityException if the user does not have write access to this plan
-     */
     /** Same required fields as the client form; a missing one would otherwise fail deep in the mapper with a 500. */
     private static void validateRequiredFields(ClientRequestDTO dto) {
         requireText(dto.getFirstName(), "Prosím zadejte jméno");
@@ -416,6 +440,24 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
         requireText(dto.getPostalCode(), "Prosím zadejte PSČ");
         require(dto.getLegallyCompetent(), "Prosím uveďte svéprávnost");
         requireText(dto.getBenefits(), "Prosím vyberte stupeň příspěvku");
+        if (!dto.getLegallyCompetent() && (isBlank(dto.getGuardianName()) || isBlank(dto.getGuardianContact()))) {
+            throw new ValidationException("U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka");
+        }
+        if (Boolean.FALSE.equals(dto.getContractIndefinite()) && dto.getContractTo() == null) {
+            throw new ValidationException("U smlouvy na dobu určitou vyplňte datum konce");
+        }
+        requireNotBefore(dto.getContractTo(), dto.getContractFrom(), "Konec smlouvy nesmí být před jejím začátkem");
+        requireNotBefore(dto.getCareTo(), dto.getCareFrom(), "Konec péče nesmí být před jejím začátkem");
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static void requireNotBefore(LocalDate end, LocalDate start, String message) {
+        if (end != null && start != null && end.isBefore(start)) {
+            throw new ValidationException(message);
+        }
     }
 
     private static void require(Object value, String message) {
@@ -431,12 +473,26 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
     }
 
     /** The payment variable symbol is year, month and the personal number in 10 digits, which leaves six for the number. */
-    private static void validatePersonalNumber(Long personalNumber) {
-        if (personalNumber < 1 || personalNumber > MAX_PERSONAL_NUMBER) {
-            throw new ValidationException("Osobní číslo musí být mezi 1 a " + MAX_PERSONAL_NUMBER);
+    private void validatePersonalNumber(Client client, String personalNumber, Long organizationId) {
+        if (!personalNumber.matches("\\d{6}")) {
+            throw new ValidationException("Osobní číslo musí mít 6 číslic");
+        }
+        boolean taken = client.getId() == null
+                ? clientRepository.existsByPersonalNumberAndOrganizationId(personalNumber, organizationId)
+                : clientRepository.existsByPersonalNumberAndOrganizationIdAndIdNot(personalNumber, organizationId, client.getId());
+        if (taken) {
+            throw new ValidationException(DUPLICATE_PERSONAL_NUMBER_MESSAGE);
         }
     }
 
+    /**
+     * Validates that the current user may modify a client's individual plan.
+     * SUPERADMIN and ADMIN (same organization) have full access, COORDINATOR may edit plans of all clients
+     * of their department, CAREGIVER only plans of clients assigned to them.
+     *
+     * @param client the client whose plan is being modified
+     * @throws SecurityException if the user does not have write access to this plan
+     */
     private void validateIndividualPlanUpdateAccess(Client client) {
         User user = getCurrentUser();
         UserRole role = user.getRole();
@@ -460,12 +516,19 @@ public class ClientService extends BaseRoleFilteringService<Client, ClientDTO> {
             return;
         }
 
-        // CAREGIVER and COORDINATOR may only edit plans for their directly assigned clients
-        if (role == UserRole.CAREGIVER || role == UserRole.COORDINATOR) {
+        if (role == UserRole.COORDINATOR) {
+            Department employeeDepartment = user.getEmployee().getDepartment();
+            if (employeeDepartment == null || !employeeDepartment.getId().equals(client.getDepartment().getId())) {
+                throw new SecurityException("Koordinátor smí upravovat individuální plán pouze klientům svého střediska");
+            }
+            return;
+        }
+
+        if (role == UserRole.CAREGIVER) {
             Long assignedCaregiverId = client.getCaregiver().getId();
             Long currentEmployeeId = user.getEmployee().getId();
             if (!assignedCaregiverId.equals(currentEmployeeId)) {
-                throw new SecurityException("Zaměstnanec smí upravovat individuální plán pouze svým klientům");
+                throw new SecurityException("Pečovatel smí upravovat individuální plán pouze svým klientům");
             }
             return;
         }

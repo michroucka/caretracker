@@ -201,7 +201,7 @@ export default function App() {
     }
 
     return (
-        <SidebarProvider defaultOpen={readSidebarOpenCookie()} className="md:h-svh md:overflow-hidden">
+        <SidebarProvider defaultOpen={readSidebarOpenCookie()} className="md:h-svh md:overflow-hidden print:h-auto print:overflow-visible">
             <a
                 href="#content"
                 onClick={(event) => {
@@ -214,11 +214,11 @@ export default function App() {
                 Přeskočit na obsah
             </a>
             <AppSidebar />
-            <SidebarInset className="md:overflow-hidden">
+            <SidebarInset className="md:overflow-hidden print:overflow-visible">
                 <AppHeader />
-                <div ref={contentRef} id="content" tabIndex={-1} data-scroll-root className="flex-1 outline-none md:overflow-y-auto">
+                <div ref={contentRef} id="content" tabIndex={-1} data-scroll-root className="flex-1 outline-none md:overflow-y-auto print:overflow-visible">
                     {/* keyed by pathname so every page change replays the short enter animation */}
-                    <PageTransitionWrapper key={pathname} className="p-4 md:p-6">
+                    <PageTransitionWrapper key={pathname} className="p-4 md:p-6 print:p-0">
                         {/* a page chunk loads in a fraction of a second; an empty area flickers less than a loader */}
                         <React.Suspense fallback={null}>{routes}</React.Suspense>
                     </PageTransitionWrapper>

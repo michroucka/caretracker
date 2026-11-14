@@ -60,6 +60,31 @@ export function formatPostalCode(value) {
 }
 
 /**
+ * Joins a client's name with academic titles: "Ing. Marie Nová, Ph.D.".
+ * @returns {string} full name
+ */
+export function formatClientName({ titleBefore, firstName, lastName, titleAfter }) {
+    const name = [titleBefore, firstName, lastName].filter(Boolean).join(' ');
+    return titleAfter ? `${name}, ${titleAfter}` : name;
+}
+
+const STATUTORY_CODE_VARIANTS = { den: 'celodenní', obed: 'oběd' };
+
+/**
+ * Turns the code of a task from the decree 505/2006 Sb. into its citation: "a1" -> "§ 6 a) 1.",
+ * "c1-obed" -> "§ 6 c) 1. (oběd)". A code of an unknown shape is returned unchanged.
+ * @param {string|null|undefined} code
+ * @returns {string}
+ */
+export function formatStatutoryCode(code) {
+    const match = /^([a-z])(\d+)(?:-(\w+))?$/.exec(code ?? '');
+    if (!match) return code ?? '';
+    const [, letter, point, variant] = match;
+    const citation = `§ 6 ${letter}) ${point}.`;
+    return variant ? `${citation} (${STATUTORY_CODE_VARIANTS[variant] ?? variant})` : citation;
+}
+
+/**
  * Removes Czech/Slovak diacritics for accent-insensitive search comparisons.
  * @param {string} text
  * @returns {string} lowercased string without diacritical marks

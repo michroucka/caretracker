@@ -1,5 +1,5 @@
 import { screen, waitFor } from '@testing-library/react';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { ClientCreate } from './ClientCreate';
@@ -11,6 +11,12 @@ import { toIsoDate } from '@/lib/dates';
 
 const PLZEN = { id: 2, city: 'Plzeň' };
 const KLATOVY = { id: 3, city: 'Klatovy' };
+
+const SLOVANY = { id: 5, name: 'DPS Slovany', street: 'Slovanská 3', city: 'Plzeň', postalCode: '30100', active: true };
+const BORY = { id: 6, name: 'DPS Bory', street: 'Borská 8', city: 'Plzeň', postalCode: '30200', active: true };
+const CLOSED_HOUSE = { id: 7, name: 'DPS Zavřený', street: 'Stará 1', city: 'Plzeň', postalCode: '30100', active: false };
+
+const NEXT_PERSONAL_NUMBERS = { [PLZEN.id]: '020043', [KLATOVY.id]: '030007' };
 
 const firstOfThisMonth = () => {
     const today = new Date();
@@ -25,11 +31,22 @@ function serveFormOptions() {
             { id: 11, firstName: 'Petr', lastName: 'Svoboda', department: KLATOVY },
         ])),
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
+        http.get(apiUrl('/departments/:id/next-personal-number'), ({ params }) =>
+            HttpResponse.json({ personalNumber: NEXT_PERSONAL_NUMBERS[params.id] })),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([{ id: 1, name: 'Dobřany' }, { id: 2, name: 'Plzeň' }])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([SLOVANY, BORY, CLOSED_HOUSE])),
     );
 }
 
-function renderCreateForm() {
+async function chooseDepartment(user, name) {
+    await user.click(field('Středisko'));
+    await user.click(screen.getByRole('option', { name }));
+}
+
+// handlers passed here override the default form options, server.use gives the last registered handler priority
+function renderCreateForm(...overrides) {
     serveFormOptions();
+    server.use(...overrides);
     return renderWithProviders(
         <Routes>
             <Route path="/clients/new" element={<ClientCreate />} />
@@ -54,6 +71,22 @@ async function enterText(user, element, text) {
     await user.paste(text);
 }
 
+async function enterCity(user, city) {
+    await user.click(field('Město'));
+    await user.type(screen.getByPlaceholderText('Hledat obec…'), city);
+    await user.click(screen.getByRole('option', { name: new RegExp(city) }));
+}
+
+async function chooseOption(user, label, optionName) {
+    await user.click(field(label));
+    await user.click(screen.getByRole('option', { name: optionName }));
+}
+
+const chooseSupportedHousing = async (user, name) => {
+    await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+    await chooseOption(user, 'Dům s pečovatelskou službou', name);
+};
+
 async function fillRequiredFields(user) {
     await enterText(user, field('Jméno'), ' Marie ');
     await enterText(user, field('Příjmení'), 'Nová');
@@ -63,7 +96,7 @@ async function fillRequiredFields(user) {
     await user.click(field('Klíčový pracovník'));
     await user.click(screen.getByRole('option', { name: 'Jana Testová' }));
     await enterText(user, field('Ulice a číslo popisné'), 'Americká 12');
-    await enterText(user, field('Město'), 'Plzeň');
+    await enterCity(user, 'Plzeň');
     await enterText(user, field('PSČ'), '30100');
 }
 
@@ -103,23 +136,77 @@ describe('ClientCreate', () => {
         await enterText(user, field('PSČ'), '301');
         await enterText(user, field('Telefon'), '12345');
         await enterText(user, field('E-mail'), 'marie@seznam');
-        await enterText(user, field('Osobní číslo'), '0');
+        await user.clear(field('Osobní číslo'));
+        await enterText(user, field('Osobní číslo'), '42');
         await user.click(submitButton());
 
         expect(screen.getByText('PSČ ve tvaru 123 45')).toBeInTheDocument();
         expect(screen.getByText('Telefon ve tvaru 123 456 789 nebo +420 123 456 789')).toBeInTheDocument();
         expect(screen.getByText('Zadejte platnou e-mailovou adresu')).toBeInTheDocument();
-        expect(screen.getByText('Osobní číslo musí být mezi 1 a 999999')).toBeInTheDocument();
+        expect(screen.getByText('Osobní číslo musí mít 6 číslic')).toBeInTheDocument();
         expect(creations).toHaveLength(0);
     });
 
     it('keeps the personal number to at most six digits', async () => {
         const { user } = renderCreateForm();
-        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
 
+        await user.clear(field('Osobní číslo'));
         await user.type(field('Osobní číslo'), '12a34567');
 
         expect(field('Osobní číslo')).toHaveValue('123456');
+    });
+
+    it('prefills the next personal number of the preselected department', async () => {
+        renderCreateForm();
+
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+    });
+
+    it('prefills the personal number of a newly chosen department', async () => {
+        const { user } = renderCreateForm();
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+
+        await chooseDepartment(user, 'Klatovy');
+
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('030007'));
+    });
+
+    it('keeps a personal number the user typed when the department changes', async () => {
+        const { user } = renderCreateForm();
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('020043'));
+        await user.clear(field('Osobní číslo'));
+        await enterText(user, field('Osobní číslo'), '029999');
+
+        await chooseDepartment(user, 'Klatovy');
+
+        expect(field('Osobní číslo')).toHaveValue('029999');
+    });
+
+    it('ignores a late number of a department that is no longer chosen', async () => {
+        const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/next-personal-number'), async ({ params }) => {
+            if (Number(params.id) === PLZEN.id) await delay(200);
+            return HttpResponse.json({ personalNumber: NEXT_PERSONAL_NUMBERS[params.id] });
+        }));
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+        await chooseDepartment(user, 'Klatovy');
+        await waitFor(() => expect(field('Osobní číslo')).toHaveValue('030007'));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        expect(field('Osobní číslo')).toHaveValue('030007');
+    });
+
+    it('leaves the personal number empty when the next number cannot be loaded', async () => {
+        const creations = serveAndRecord('post', '/clients', () => HttpResponse.json({ id: 55 }));
+        const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/next-personal-number'), serverError('Chyba serveru', 500)));
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+
+        await user.click(submitButton());
+
+        await waitFor(() => expect(creations).toHaveLength(1));
+        expect(creations[0].body.personalNumber).toBeNull();
     });
 
     it('offers only caregivers of the chosen department', async () => {
@@ -139,7 +226,8 @@ describe('ClientCreate', () => {
 
         await enterText(user, field('Telefon'), '+420777123456');
         await enterText(user, field('E-mail'), 'marie@example.cz');
-        await enterText(user, field('Osobní číslo'), '42');
+        await user.clear(field('Osobní číslo'));
+        await enterText(user, field('Osobní číslo'), '010042');
         await user.click(field('Úkony'));
         await user.click(screen.getByRole('option', { name: 'Úklid' }));
         await user.keyboard('{Escape}');
@@ -154,12 +242,20 @@ describe('ClientCreate', () => {
             lastName: 'Nová',
             gender: 'FEMALE',
             dateOfBirth: toIsoDate(firstOfThisMonth()),
-            personalNumber: 42,
+            personalNumber: '010042',
             departmentId: 2,
             caregiverId: 10,
             street: 'Americká 12',
             city: 'Plzeň',
             postalCode: '301 00',
+            accommodationType: null,
+            supportedHousingId: null,
+            travelDistanceKm: null,
+            hasElevator: null,
+            floorOrRoom: null,
+            accessMethod: null,
+            lockCode: null,
+            accessNote: null,
             email: 'marie@example.cz',
             phone: '+420 777 123 456',
             legallyCompetent: true,
@@ -170,7 +266,55 @@ describe('ClientCreate', () => {
             notes: null,
             terminationDate: null,
             terminationReason: null,
+            titleBefore: null,
+            titleAfter: null,
+            phone2: null,
+            guardianName: null,
+            guardianContact: null,
+            careFrom: null,
+            careTo: null,
+            contractFrom: null,
+            contractTo: null,
+            contractIndefinite: true,
+            noCharge: false,
+            intakeAssessmentDate: null,
         });
+    });
+
+    it('asks for the guardian only of a client who is not legally competent', async () => {
+        const creations = serveAndRecord('post', '/clients');
+        const { user } = renderCreateForm();
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+        expect(screen.queryByLabelText(/^Kontakt na opatrovníka/)).not.toBeInTheDocument();
+
+        await user.click(screen.getByLabelText('Svéprávný'));
+        expect(field('Opatrovník')).toBeInTheDocument();
+        await user.click(submitButton());
+
+        expect(screen.getAllByText('U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka')).toHaveLength(2);
+        expect(creations).toHaveLength(0);
+
+        await enterText(user, field('Opatrovník'), 'Jan Nový');
+        await enterText(user, field('Kontakt na opatrovníka'), '603 111 222');
+        await user.click(submitButton());
+
+        await waitFor(() => expect(creations).toHaveLength(1));
+        expect(creations[0].body).toMatchObject({ legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: '603 111 222' });
+    });
+
+    it('asks for the contract end only of a fixed-term contract', async () => {
+        const creations = serveAndRecord('post', '/clients');
+        const { user } = renderCreateForm();
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+        expect(screen.queryByLabelText(/^Konec smlouvy/)).not.toBeInTheDocument();
+
+        await user.click(screen.getByLabelText('Smlouva na dobu neurčitou'));
+        await user.click(submitButton());
+
+        expect(screen.getByText('U smlouvy na dobu určitou vyplňte datum konce')).toBeInTheDocument();
+        expect(creations).toHaveLength(0);
     });
 
     it('shows the server message and stays on the form when saving fails', async () => {
@@ -186,5 +330,135 @@ describe('ClientCreate', () => {
         expect(window.location.pathname).toBe('/clients/new');
         await waitFor(() => expect(submitButton()).toBeEnabled());
         expect(field('Jméno')).toHaveValue(' Marie ');
+    });
+
+    describe('accommodation', () => {
+        it('offers the municipalities of the department and accepts a city that is not among them', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await user.click(field('Město'));
+            expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Dobřany', 'Plzeň']);
+
+            await user.type(screen.getByPlaceholderText('Hledat obec…'), 'Nepomuk');
+            await user.click(screen.getByRole('option', { name: /Nepomuk/ }));
+
+            expect(field('Město')).toHaveTextContent('Nepomuk');
+        });
+
+        it('loads the municipalities of a newly chosen department', async () => {
+            const { user } = renderCreateForm(http.get(apiUrl('/departments/:id/municipalities'), ({ params }) =>
+                HttpResponse.json(Number(params.id) === KLATOVY.id ? [{ id: 9, name: 'Janovice' }] : [{ id: 1, name: 'Dobřany' }])));
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await chooseDepartment(user, 'Klatovy');
+            await user.click(field('Město'));
+
+            expect(await screen.findByRole('option', { name: 'Janovice' })).toBeInTheDocument();
+            expect(screen.queryByRole('option', { name: 'Dobřany' })).not.toBeInTheDocument();
+        });
+
+        it('offers only active supported housings, and only for the supported housing type', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            expect(screen.queryByLabelText(/^Dům s pečovatelskou službou/)).not.toBeInTheDocument();
+
+            await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+            await user.click(field('Dům s pečovatelskou službou'));
+
+            await waitFor(() => expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['DPS Slovany', 'DPS Bory']));
+        });
+
+        it('fills the address from the chosen house and locks it', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            expect(field('Ulice a číslo popisné')).toHaveValue('Slovanská 3');
+            expect(field('Město')).toHaveValue('Plzeň');
+            expect(field('PSČ')).toHaveValue('301 00');
+            for (const label of ['Ulice a číslo popisné', 'Město', 'PSČ']) expect(field(label)).toHaveAttribute('readonly');
+
+            await chooseOption(user, 'Dům s pečovatelskou službou', 'DPS Bory');
+            expect(field('Ulice a číslo popisné')).toHaveValue('Borská 8');
+        });
+
+        it('unlocks the address and keeps its values when the type changes from supported housing', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            await chooseOption(user, 'Druh ubytování', 'Nájemní byt');
+
+            expect(field('Ulice a číslo popisné')).not.toHaveAttribute('readonly');
+            expect(field('Ulice a číslo popisné')).toHaveValue('Slovanská 3');
+            expect(screen.queryByLabelText(/^Dům s pečovatelskou službou/)).not.toBeInTheDocument();
+            expect(field('Město')).toHaveTextContent('Plzeň');
+        });
+
+        it('requires a house for supported housing, but not the address', async () => {
+            const creations = serveAndRecord('post', '/clients');
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseOption(user, 'Druh ubytování', 'Dům s pečovatelskou službou (DPS)');
+
+            await user.click(submitButton());
+
+            expect(screen.getByText('Vyberte dům s pečovatelskou službou')).toBeInTheDocument();
+            expect(screen.queryByText('Prosím zadejte ulici a číslo popisné')).not.toBeInTheDocument();
+            expect(creations).toHaveLength(0);
+        });
+
+        it('forgets the chosen house when the department changes', async () => {
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await chooseSupportedHousing(user, 'DPS Slovany');
+
+            await chooseDepartment(user, 'Klatovy');
+
+            expect(field('Dům s pečovatelskou službou')).toHaveTextContent('Vyberte dům');
+        });
+
+        it('sends the accommodation fields', async () => {
+            const creations = serveAndRecord('post', '/clients', () => HttpResponse.json({ id: 55 }));
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await fillRequiredFields(user);
+            await chooseSupportedHousing(user, 'DPS Slovany');
+            await chooseOption(user, 'Výtah v domě', 'Ano');
+            await enterText(user, field('Patro nebo pokoj'), '2. patro');
+            await chooseOption(user, 'Přístup do bytu', 'Klíče');
+            await enterText(user, field('Kód od zámku'), '1234');
+            await enterText(user, field('Dojezdová vzdálenost'), '12');
+
+            await user.click(submitButton());
+
+            await waitFor(() => expect(creations).toHaveLength(1));
+            expect(creations[0].body).toMatchObject({
+                accommodationType: 'SUPPORTED_HOUSING',
+                supportedHousingId: 5,
+                street: 'Slovanská 3',
+                postalCode: '301 00',
+                hasElevator: true,
+                floorOrRoom: '2. patro',
+                accessMethod: 'KEYS',
+                lockCode: '1234',
+                travelDistanceKm: 12,
+            });
+        });
+
+        it('rejects a negative travel distance', async () => {
+            const creations = serveAndRecord('post', '/clients');
+            const { user } = renderCreateForm();
+            await screen.findByRole('button', { name: 'Vytvořit klienta' });
+            await fillRequiredFields(user);
+            await enterText(user, field('Dojezdová vzdálenost'), '-3');
+
+            await user.click(submitButton());
+
+            expect(screen.getByText('Dojezdová vzdálenost nesmí být záporná')).toBeInTheDocument();
+            expect(creations).toHaveLength(0);
+        });
     });
 });

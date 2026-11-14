@@ -11,10 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { benefitsOptions, genderOptions, terminationReasonOptions } from "@/constants/clientConstants";
+import { accessMethodOptions, accommodationTypeOptions, benefitsOptions, genderOptions, terminationReasonOptions } from "@/constants/clientConstants";
+import { useDepartmentCollection } from "@/hooks/useDepartmentCollection";
 import { todayIsoDate } from "@/lib/dates";
 import { formatPhoneNumber, formatPostalCode } from "@/utils/formatters";
-import { OLDEST_BIRTH_DATE } from "./clientForm";
+import { OLDEST_BIRTH_DATE, SUPPORTED_HOUSING } from "./clientForm";
 
 function FieldSection({ title, description, children }) {
     return (
@@ -27,6 +28,14 @@ function FieldSection({ title, description, children }) {
         </Card>
     );
 }
+
+const elevatorOptions = [
+    { key: "unknown", name: "Neuvedeno" },
+    { key: "true", name: "Ano" },
+    { key: "false", name: "Ne" },
+];
+
+const elevatorKeyOf = (hasElevator) => (hasElevator == null ? "unknown" : String(hasElevator));
 
 function OptionSelect({ controlProps, value, onChange, options, placeholder, disabled }) {
     return (
@@ -61,8 +70,29 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
         .map((caregiver) => ({ value: caregiver.id, label: `${caregiver.firstName} ${caregiver.lastName}` }));
     const taskOptions = tasks.map((task) => ({ value: task.id, label: task.name }));
 
+    const { items: municipalities } = useDepartmentCollection(values.departmentId, "municipalities", "Chyba při načítání obcí");
+    const { items: supportedHousings } = useDepartmentCollection(values.departmentId, "supported-housings", "Chyba při načítání domů s pečovatelskou službou");
+    const municipalityOptions = municipalities.map((municipality) => ({ value: municipality.name, label: municipality.name }));
+    const isSupportedHousing = values.accommodationType === SUPPORTED_HOUSING;
+    const isAddressLocked = isSupportedHousing && Boolean(values.supportedHousingId);
+
+    const changeAccommodationType = (accommodationType) => {
+        onChange("accommodationType", accommodationType);
+        if (accommodationType !== SUPPORTED_HOUSING) onChange("supportedHousingId", null);
+    };
+
+    const changeSupportedHousing = (housingId) => {
+        const housing = supportedHousings.find((candidate) => candidate.id === housingId);
+        if (!housing) return;
+        onChange("supportedHousingId", housingId);
+        onChange("street", housing.street);
+        onChange("city", housing.city);
+        onChange("postalCode", formatPostalCode(housing.postalCode));
+    };
+
     const changeDepartment = (departmentId) => {
         onChange("departmentId", departmentId);
+        onChange("supportedHousingId", null);
         const caregiver = caregivers.find((candidate) => candidate.id === values.caregiverId);
         if (caregiver && caregiver.department?.id !== departmentId) onChange("caregiverId", null);
     };
@@ -72,6 +102,12 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
             <FieldSection title="Osobní údaje">
                 <PhotoInput id={`${idPrefix}-picture`} value={values.picture} onChange={(picture) => onChange("picture", picture)} name={`${values.firstName} ${values.lastName}`} hasSavedPicture={hasSavedPicture} disabled={disabled} />
                 <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <FormField {...field("titleBefore", "Titul před jménem")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={20} disabled={disabled} value={values.titleBefore} onChange={update("titleBefore")} />}
+                    </FormField>
+                    <FormField {...field("titleAfter", "Titul za jménem")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={20} disabled={disabled} value={values.titleAfter} onChange={update("titleAfter")} />}
+                    </FormField>
                     <FormField {...field("firstName", "Jméno", { required: true })}>
                         {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.firstName} onChange={update("firstName")} />}
                     </FormField>
@@ -88,7 +124,7 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                             <DatePicker {...controlProps} minDate={OLDEST_BIRTH_DATE} maxDate={todayIsoDate()} disabled={disabled} value={values.dateOfBirth} onChange={(date) => onChange("dateOfBirth", date)} />
                         )}
                     </FormField>
-                    <FormField {...field("personalNumber", "Osobní číslo", { hint: "Číslo klienta v evidenci organizace, nejvýš 6 číslic." })}>
+                    <FormField {...field("personalNumber", "Osobní číslo")}>
                         {(controlProps) => (
                             <Input {...controlProps} inputMode="numeric" maxLength={6} className="tabular-nums" disabled={disabled} value={values.personalNumber} onChange={(event) => onChange("personalNumber", event.target.value.replace(/\D/g, ""))} />
                         )}
@@ -99,6 +135,19 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                     </div>
                 </div>
             </FieldSection>
+
+            {!values.legallyCompetent && (
+                <FieldSection title="Opatrovník">
+                    <div className="grid items-start gap-4 sm:grid-cols-2">
+                        <FormField {...field("guardianName", "Opatrovník", { required: true })}>
+                            {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.guardianName} onChange={update("guardianName")} />}
+                        </FormField>
+                        <FormField {...field("guardianContact", "Kontakt na opatrovníka", { required: true })}>
+                            {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.guardianContact} onChange={update("guardianContact")} />}
+                        </FormField>
+                    </div>
+                </FieldSection>
+            )}
 
             <FieldSection title="Péče">
                 <div className="grid items-start gap-4 sm:grid-cols-2">
@@ -147,24 +196,122 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                 </div>
             </FieldSection>
 
-            <FieldSection title="Adresa a kontakt" description="Z adresy se dohledá poloha klienta na mapě.">
-                <FormField {...field("street", "Ulice a číslo popisné", { required: true })}>
-                    {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.street} onChange={update("street")} />}
+            <FieldSection title="Smlouva">
+                <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <FormField {...field("contractFrom", "Smlouva od")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.contractFrom} onChange={(date) => onChange("contractFrom", date)} />}
+                    </FormField>
+                    <div className="flex items-center gap-3 sm:pt-7">
+                        <Checkbox id={`${idPrefix}-contract-indefinite`} checked={values.contractIndefinite} onCheckedChange={(checked) => onChange("contractIndefinite", checked === true)} disabled={disabled} />
+                        <Label htmlFor={`${idPrefix}-contract-indefinite`}>Smlouva na dobu neurčitou</Label>
+                    </div>
+                    {!values.contractIndefinite && (
+                        <FormField {...field("contractTo", "Konec smlouvy", { required: true })}>
+                            {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.contractTo} onChange={(date) => onChange("contractTo", date)} />}
+                        </FormField>
+                    )}
+                    <FormField {...field("careFrom", "Péče od")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.careFrom} onChange={(date) => onChange("careFrom", date)} />}
+                    </FormField>
+                    <FormField {...field("careTo", "Péče do")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.careTo} onChange={(date) => onChange("careTo", date)} />}
+                    </FormField>
+                    <FormField {...field("intakeAssessmentDate", "Vstupní šetření")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.intakeAssessmentDate} onChange={(date) => onChange("intakeAssessmentDate", date)} />}
+                    </FormField>
+                    <div className="flex items-center gap-3 sm:pt-7">
+                        <Checkbox id={`${idPrefix}-no-charge`} checked={values.noCharge} onCheckedChange={(checked) => onChange("noCharge", checked === true)} disabled={disabled} />
+                        <Label htmlFor={`${idPrefix}-no-charge`}>Bez úhrady</Label>
+                    </div>
+                </div>
+            </FieldSection>
+
+            <FieldSection title="Ubytování" description="Z adresy se dohledá poloha klienta na mapě.">
+                <FormField {...field("accommodationType", "Druh ubytování")}>
+                    {(controlProps) => (
+                        <OptionSelect controlProps={controlProps} value={values.accommodationType} onChange={changeAccommodationType} options={accommodationTypeOptions} placeholder="Vyberte druh ubytování" disabled={disabled} />
+                    )}
+                </FormField>
+                {isSupportedHousing && (
+                    <FormField {...field("supportedHousingId", "Dům s pečovatelskou službou", { required: true })}>
+                        {(controlProps) => (
+                            <Select value={values.supportedHousingId ? String(values.supportedHousingId) : ""} onValueChange={(id) => changeSupportedHousing(Number(id))} disabled={disabled}>
+                                <SelectTrigger {...controlProps} className="w-full"><SelectValue placeholder="Vyberte dům" /></SelectTrigger>
+                                <SelectContent>
+                                    {supportedHousings.filter((housing) => housing.active || housing.id === values.supportedHousingId).map((housing) => <SelectItem key={housing.id} value={String(housing.id)}>{housing.active ? housing.name : `${housing.name} (ukončený)`}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    </FormField>
+                )}
+                <FormField {...field("street", "Ulice a číslo popisné", { required: !isSupportedHousing })}>
+                    {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} readOnly={isAddressLocked} value={values.street} onChange={update("street")} />}
                 </FormField>
                 <div className="grid grid-cols-3 items-start gap-4">
-                    <FormField {...field("city", "Město", { required: true, className: "col-span-2" })}>
-                        {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.city} onChange={update("city")} />}
+                    <FormField {...field("city", "Město", { required: !isSupportedHousing, className: "col-span-2" })}>
+                        {(controlProps) => isAddressLocked ? (
+                            <Input {...controlProps} readOnly disabled={disabled} value={values.city} />
+                        ) : (
+                            <Combobox
+                                {...controlProps}
+                                options={municipalityOptions}
+                                value={values.city || null}
+                                onChange={(city) => onChange("city", city ?? "")}
+                                allowsCustomValue
+                                placeholder="Vyberte nebo zadejte obec"
+                                searchPlaceholder="Hledat obec…"
+                                disabled={disabled}
+                            />
+                        )}
                     </FormField>
-                    <FormField {...field("postalCode", "PSČ", { required: true })}>
+                    <FormField {...field("postalCode", "PSČ", { required: !isSupportedHousing })}>
                         {(controlProps) => (
-                            <Input {...controlProps} inputMode="numeric" className="tabular-nums" disabled={disabled} value={values.postalCode} onChange={(event) => onChange("postalCode", formatPostalCode(event.target.value))} />
+                            <Input {...controlProps} inputMode="numeric" className="tabular-nums" disabled={disabled} readOnly={isAddressLocked} value={values.postalCode} onChange={(event) => onChange("postalCode", formatPostalCode(event.target.value))} />
                         )}
                     </FormField>
                 </div>
                 <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <FormField {...field("floorOrRoom", "Patro nebo pokoj")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={50} disabled={disabled} value={values.floorOrRoom} onChange={update("floorOrRoom")} />}
+                    </FormField>
+                    <FormField {...field("travelDistanceKm", "Dojezdová vzdálenost (km)")}>
+                        {(controlProps) => <Input {...controlProps} inputMode="numeric" className="tabular-nums" disabled={disabled} value={values.travelDistanceKm} onChange={update("travelDistanceKm")} />}
+                    </FormField>
+                    <FormField {...field("accessMethod", "Přístup do bytu")}>
+                        {(controlProps) => (
+                            <OptionSelect controlProps={controlProps} value={values.accessMethod} onChange={(accessMethod) => onChange("accessMethod", accessMethod)} options={accessMethodOptions} placeholder="Vyberte způsob přístupu" disabled={disabled} />
+                        )}
+                    </FormField>
+                    <FormField {...field("lockCode", "Kód od zámku")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={20} disabled={disabled} value={values.lockCode} onChange={update("lockCode")} />}
+                    </FormField>
+                </div>
+                <FormField {...field("accessNote", "Poznámka k přístupu")}>
+                    {(controlProps) => <Textarea {...controlProps} rows={2} disabled={disabled} value={values.accessNote} onChange={update("accessNote")} />}
+                </FormField>
+                <FormField {...field("hasElevator", "Výtah v domě")}>
+                    {(controlProps) => (
+                        <OptionSelect
+                            controlProps={controlProps}
+                            value={elevatorKeyOf(values.hasElevator)}
+                            onChange={(key) => onChange("hasElevator", key === "unknown" ? null : key === "true")}
+                            options={elevatorOptions}
+                            disabled={disabled}
+                        />
+                    )}
+                </FormField>
+            </FieldSection>
+
+            <FieldSection title="Kontakt">
+                <div className="grid items-start gap-4 sm:grid-cols-2">
                     <FormField {...field("phone", "Telefon")}>
                         {(controlProps) => (
                             <Input {...controlProps} type="tel" className="tabular-nums" disabled={disabled} value={values.phone} onChange={(event) => onChange("phone", formatPhoneNumber(event.target.value))} />
+                        )}
+                    </FormField>
+                    <FormField {...field("phone2", "Druhý telefon")}>
+                        {(controlProps) => (
+                            <Input {...controlProps} type="tel" className="tabular-nums" disabled={disabled} value={values.phone2} onChange={(event) => onChange("phone2", formatPhoneNumber(event.target.value))} />
                         )}
                     </FormField>
                     <FormField {...field("email", "E-mail")}>

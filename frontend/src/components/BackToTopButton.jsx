@@ -37,7 +37,7 @@ export function BackToTopButton({ threshold = 600 }) {
         <>
             <span ref={anchorRef} hidden />
             {createPortal(
-                <div className={cn("fixed right-6 bottom-6 z-40 transition-[opacity,translate] duration-base ease-out", isVisible ? "opacity-100" : "pointer-events-none translate-y-3 opacity-0")}>
+                <div className={cn("print:hidden fixed right-6 bottom-6 z-40 transition-[opacity,translate] duration-base ease-out", isVisible ? "opacity-100" : "pointer-events-none translate-y-3 opacity-0")}>
                     <Button variant="outline" size="icon" className="rounded-full bg-card shadow-md dark:bg-card dark:hover:bg-accent" onClick={scrollToTop} aria-label="Zpět nahoru" tabIndex={isVisible ? 0 : -1}>
                         <IconArrowUp />
                     </Button>

@@ -42,6 +42,9 @@ class PerformedTaskRepositoryIT extends AbstractRepositoryTest {
     @Autowired
     private PerformedTaskRepository performedTaskRepository;
 
+    @Autowired
+    private StatutoryTaskRepository statutoryTaskRepository;
+
     private Organization organization;
     private Department department;
     private Department otherDepartment;
@@ -102,6 +105,25 @@ class PerformedTaskRepositoryIT extends AbstractRepositoryTest {
         assertThat(intAt(november, 2)).isEqualTo(7);
         assertThat(intAt(november, 3)).isEqualTo(sumOfCalculatedPrices);
         assertThat(intAt(departmentRow, 2)).isEqualTo(sumOfCalculatedPrices);
+    }
+
+    @Test
+    void incomeOverMonthlyThresholdRoundsBothPartsLikeTheReceipt() {
+        Task dressing = testData.task(organization, UnitType.HOUR, 165);
+        dressing.setStatutoryTask(statutoryTaskRepository.findByCode("a3").orElseThrow());
+        LocalDateTime day = LocalDateTime.of(2026, 11, 10, 8, 0);
+        // 4799 min at 165 = 13197.25 → 13197; the next 11 min are 1 min at 165 (2.75 → 3) and 10 min at 145 (24.17 → 24)
+        testData.performedTask(client, dressing, day, 4799);
+        testData.performedTask(client, dressing, day.plusDays(1), 11);
+        // another client's hours have their own threshold
+        testData.performedTask(otherDepartmentClient, dressing, day, 60);
+        flushAndClear();
+
+        Object[] november = single(performedTaskRepository.sumByMonth(NOVEMBER, DECEMBER, organization.getId(), department.getId(), null));
+        List<Object[]> departments = performedTaskRepository.sumByDepartment(organization.getId(), NOVEMBER, DECEMBER);
+
+        assertThat(intAt(november, 3)).isEqualTo(13197 + 3 + 24);
+        assertThat(departments).extracting(row -> intAt(row, 2)).containsExactlyInAnyOrder(13197 + 3 + 24, 165);
     }
 
     @Test

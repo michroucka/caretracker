@@ -13,7 +13,7 @@ export function formatTaskPrice(task) {
     return `${new Intl.NumberFormat("cs-CZ").format(task.unitPrice)} ${suffix}`;
 }
 
-export const EMPTY_TASK = { name: "", unitType: "HOUR", unitPrice: "", doubleMeeting: false };
+export const EMPTY_TASK = { name: "", unitType: "HOUR", unitPrice: "", doubleMeeting: false, statutoryTaskId: null };
 
 export function toFormValues(task) {
     return {
@@ -21,14 +21,32 @@ export function toFormValues(task) {
         unitType: task?.unitType ?? "HOUR",
         unitPrice: task?.unitPrice != null ? String(task.unitPrice) : "",
         doubleMeeting: task?.doubleMeeting ?? false,
+        statutoryTaskId: task?.statutoryTaskId ?? null,
     };
 }
 
-export function validateTask(values) {
+/** Form values a chosen statutory item fills in; no item only removes the link. */
+export function statutoryPrefill(statutoryTask) {
+    if (!statutoryTask) return { statutoryTaskId: null };
+    return {
+        statutoryTaskId: statutoryTask.id,
+        name: statutoryTask.shortName,
+        unitType: statutoryTask.unitType,
+        unitPrice: String(statutoryTask.maxUnitPrice),
+    };
+}
+
+export function validateTask(values, statutoryTasks = []) {
     const errors = {};
     if (!values.name.trim()) errors.name = "Prosím zadejte název";
     if (!values.unitPrice) errors.unitPrice = "Prosím zadejte cenu";
     else if (Number(values.unitPrice) <= 0) errors.unitPrice = "Cena musí být větší než 0";
+    else {
+        const statutoryTask = statutoryTasks.find((item) => item.id === values.statutoryTaskId);
+        if (statutoryTask && Number(values.unitPrice) > statutoryTask.maxUnitPrice) {
+            errors.unitPrice = `Cena převyšuje maximální úhradu podle vyhlášky (${statutoryTask.maxUnitPrice} Kč)`;
+        }
+    }
     return errors;
 }
 
@@ -38,6 +56,7 @@ export function toRequest(values, organizationId) {
         unitType: values.unitType,
         unitPrice: Number(values.unitPrice),
         doubleMeeting: values.doubleMeeting,
+        statutoryTaskId: values.statutoryTaskId,
         organizationId: organizationId ?? null,
     };
 }

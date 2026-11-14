@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useRecordForm } from "@/hooks/useRecordForm";
+import { formatStatutoryCode } from "@/utils/formatters";
 import { TaskFields } from "./TaskFields";
 import { formatTaskPrice, toFormValues, toRequest, unitTypeLabel, validateTask } from "./taskForm";
 
@@ -15,6 +16,14 @@ function TaskView({ task }) {
                 <SheetSummaryTile label="Cena" value={formatTaskPrice(task)} valueClassName="text-xl" />
                 <SheetSummaryTile label="Jednotka" value={unitTypeLabel(task.unitType)} valueClassName="text-xl" />
             </div>
+            {task.statutoryTaskId != null && (
+                <SheetSection label="Úkon podle vyhlášky">
+                    <div className="grid gap-0.5">
+                        <p className="font-medium">{formatStatutoryCode(task.statutoryTaskCode)}</p>
+                        <p className="text-sm text-muted-foreground">{task.statutoryTaskName}</p>
+                    </div>
+                </SheetSection>
+            )}
             <SheetSection label="Setkání s klientem">
                 <div className="flex items-start gap-3">
                     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
@@ -35,7 +44,7 @@ function TaskView({ task }) {
 /**
  * Catalog task detail. Without `canEdit` it is read-only (caregivers and coordinators).
  */
-export function TaskSheet({ open, onOpenChange, task, isLoading, canEdit, organizationId, onSave, onTerminate, onActivate }) {
+export function TaskSheet({ open, onOpenChange, task, isLoading, canEdit, organizationId, statutoryTasks, onSave, onTerminate, onActivate }) {
     const [isEditing, setIsEditing] = React.useState(false);
     const [wasOpen, setWasOpen] = React.useState(open);
     if (open !== wasOpen) {
@@ -51,7 +60,7 @@ export function TaskSheet({ open, onOpenChange, task, isLoading, canEdit, organi
 
     const save = async (event) => {
         event.preventDefault();
-        const saved = await form.submit(validateTask, (values) => onSave(task.id, toRequest(values, organizationId)));
+        const saved = await form.submit((values) => validateTask(values, statutoryTasks), (values) => onSave(task.id, toRequest(values, organizationId)));
         if (saved) setIsEditing(false);
     };
 
@@ -89,7 +98,7 @@ export function TaskSheet({ open, onOpenChange, task, isLoading, canEdit, organi
         >
             {task && (isEditing ? (
                 <form id="task-edit-form" noValidate onSubmit={save}>
-                    <TaskFields idPrefix="task-edit" values={form.values} errors={form.errors} onChange={form.setField} disabled={form.isSubmitting} shakeSignal={form.submitCount} />
+                    <TaskFields idPrefix="task-edit" values={form.values} errors={form.errors} onChange={form.setField} disabled={form.isSubmitting} shakeSignal={form.submitCount} statutoryTasks={statutoryTasks} />
                 </form>
             ) : (
                 <TaskView task={task} />

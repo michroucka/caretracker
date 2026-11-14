@@ -1,0 +1,129 @@
+import React from "react";
+import { IconDownload, IconFileTypePdf, IconPhoto, IconTrash, IconUpload } from "@tabler/icons-react";
+import { useClientDocuments } from "@/hooks/useClientDocuments";
+import { documentTypeOptions } from "@/constants/clientConstants";
+import { formatDate } from "@/utils/formatters";
+import { ConfirmDialog } from "@/components/data/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/components/ui/sonner";
+import { shrinkPhoto } from "@/lib/pictures";
+import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
+
+const ALLOWED_CONTENT_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+// scans of documents stay readable at this size, photos from a phone shrink to a few hundred kB
+const DOCUMENT_PHOTO_EDGE = 2400;
+
+const typeName = (type) => documentTypeOptions.find((option) => option.key === type)?.name ?? type;
+
+const documentDescription = (document) =>
+    [typeName(document.type), formatDate(document.uploadedAt), document.uploadedByName].filter(Boolean).join(" · ");
+
+async function prepareFile(file) {
+    if (!file.type.startsWith("image/")) return file;
+    const shrunk = await shrinkPhoto(file, { maxEdge: DOCUMENT_PHOTO_EDGE });
+    return new File([shrunk], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg" });
+}
+
+const validateType = (file) => (ALLOWED_CONTENT_TYPES.includes(file.type) ? null : "Nahrát lze jen PDF, JPEG nebo PNG");
+
+const validateSize = (file) => (file.size > MAX_FILE_SIZE ? "Soubor je příliš velký. Maximální velikost je 10 MB" : null);
+
+/** Documents of a client. Without `canModify` (terminated client) they can only be downloaded. */
+export function ClientDocuments({ clientId, canModify }) {
+    const { documents, loading, fetchDocuments, uploadDocument, deleteDocument, downloadDocument, fetchDocumentFile } = useClientDocuments(clientId);
+    const [type, setType] = React.useState("");
+    const [documentToDelete, setDocumentToDelete] = React.useState(null);
+    const [documentToPreview, setDocumentToPreview] = React.useState(null);
+    const fileInputRef = React.useRef(null);
+
+    React.useEffect(() => {
+        fetchDocuments();
+    }, [fetchDocuments]);
+
+    const upload = async (event) => {
+        const file = event.target.files[0];
+        event.target.value = "";
+        if (!file) return;
+        const typeProblem = validateType(file);
+        if (typeProblem) {
+            toast.error(typeProblem);
+            return;
+        }
+        let prepared;
+        try {
+            prepared = await prepareFile(file);
+        } catch (err) {
+            toast.error(err.message);
+            return;
+        }
+        const sizeProblem = validateSize(prepared);
+        if (sizeProblem) {
+            toast.error(sizeProblem);
+            return;
+        }
+        // the hook shows the error toast itself
+        await uploadDocument(prepared, type).catch(() => {});
+    };
+
+    return (
+        <div className="grid gap-4">
+            {!loading && documents.length === 0 && <p className="text-muted-foreground">Klient zatím nemá žádné dokumenty.</p>}
+            {documents.length > 0 && (
+                <ul className="flex flex-wrap gap-2">
+                    {documents.map((document) => (
+                        <li key={document.id} className="flex max-w-full items-center gap-2 rounded-lg border py-1.5 pr-1 pl-2.5 transition-colors duration-fast ease-out hover:bg-accent/60 sm:max-w-80">
+                            <button
+                                type="button"
+                                aria-label={`Zobrazit dokument ${document.fileName}`}
+                                onClick={() => setDocumentToPreview(document)}
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                {document.contentType === "application/pdf"
+                                    ? <IconFileTypePdf className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                    : <IconPhoto className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                                <span className="grid min-w-0">
+                                    <span className="truncate text-sm font-medium">{document.fileName}</span>
+                                    <span className="truncate text-xs text-muted-foreground">{documentDescription(document)}</span>
+                                </span>
+                            </button>
+                            <div className="flex shrink-0">
+                                <Button variant="ghost" size="icon-row" aria-label={`Stáhnout dokument ${document.fileName}`} onClick={() => downloadDocument(document)}><IconDownload /></Button>
+                                {canModify && <Button variant="ghost" size="icon-row" aria-label={`Smazat dokument ${document.fileName}`} onClick={() => setDocumentToDelete(document)}><IconTrash /></Button>}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {canModify && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger aria-label="Typ dokumentu" className="w-48"><SelectValue placeholder="Typ dokumentu" /></SelectTrigger>
+                        <SelectContent>
+                            {documentTypeOptions.map((option) => <SelectItem key={option.key} value={option.key}>{option.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <input ref={fileInputRef} type="file" aria-label="Soubor dokumentu" accept={ALLOWED_CONTENT_TYPES.join(",")} className="sr-only" disabled={!type} onChange={upload} />
+                    <Button type="button" variant="outline" disabled={!type} onClick={() => fileInputRef.current?.click()}><IconUpload /> Nahrát soubor</Button>
+                </div>
+            )}
+            <DocumentPreviewDialog
+                document={documentToPreview}
+                description={documentToPreview ? documentDescription(documentToPreview) : ""}
+                onClose={() => setDocumentToPreview(null)}
+                loadFile={fetchDocumentFile}
+                onDownload={downloadDocument}
+            />
+            <ConfirmDialog
+                open={documentToDelete != null}
+                onOpenChange={(open) => !open && setDocumentToDelete(null)}
+                title="Smazat dokument?"
+                description={`Dokument ${documentToDelete?.fileName} bude trvale smazán.`}
+                confirmLabel="Smazat"
+                destructive
+                onConfirm={() => deleteDocument(documentToDelete.id)}
+            />
+        </div>
+    );
+}

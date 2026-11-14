@@ -1,14 +1,14 @@
 import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { IconDots, IconHistory, IconLoader2, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconDots, IconHistory, IconLoader2, IconPlus, IconPrinter, IconTrash } from "@tabler/icons-react";
 import { useAuth } from "../contexts/AuthContext.tsx";
 import { useClients } from "../hooks/useClients.jsx";
 import { useIndividualPlan } from "../hooks/useIndividualPlan.jsx";
 import { useRecordForm } from "../hooks/useRecordForm";
 import { ROLES } from "../constants/roles.js";
 import { benefitsOptions } from "../constants/clientConstants.js";
-import { formatDate } from "../utils/formatters.js";
+import { formatClientName, formatDate, formatPhoneNumber } from "../utils/formatters.js";
 import { BackToTopButton } from "@/components/BackToTopButton";
 import { DatePicker } from "@/components/DatePicker";
 import { FormField } from "@/components/FormField";
@@ -47,8 +47,12 @@ function ClientSummaryCard({ client }) {
         <Card>
             <CardHeader><CardTitle>Klient</CardTitle></CardHeader>
             <CardContent>
-                <dl className="grid gap-4">
+                <dl className="grid gap-4 print:grid-cols-2">
+                    <DetailItem label="Jméno">{client.fullName}</DetailItem>
                     <DetailItem label="Datum narození">{client.dateOfBirth && <span className="tabular-nums">{formatDate(client.dateOfBirth)}</span>}</DetailItem>
+                    <DetailItem label="Telefon">
+                        {client.phone && <a href={`tel:${client.phone.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">{formatPhoneNumber(client.phone)}</a>}
+                    </DetailItem>
                     <DetailItem label="Službu využívá od">{client.created && <span className="tabular-nums">{formatDate(client.created)}</span>}</DetailItem>
                     <DetailItem label="Středisko">{client.department?.city}</DetailItem>
                     <DetailItem label="Klíčový pracovník">{client.caregiver?.fullName}</DetailItem>
@@ -105,7 +109,7 @@ function PlanSectionsForm({ form }) {
 function DailyRecordsSection({ records, canAdd, canDelete, onAdd, onDelete }) {
     const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
     return (
-        <section className="grid gap-4">
+        <section className="grid gap-4 print:hidden">
             <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="grid gap-1">
                     <h2 className="text-2xl">Denní záznamy</h2>
@@ -217,10 +221,11 @@ function IndividualPlan() {
     }
 
     // a terminated client's plan and daily records are read-only
-    const canEdit = client.active && (isAdmin || user.employeeId === client.caregiver?.id);
+    const isClientsCoordinator = user.role === ROLES.COORDINATOR && user.departmentId === client.department?.id;
+    const canEdit = client.active && (isAdmin || isClientsCoordinator || user.employeeId === client.caregiver?.id);
     const latestVersion = individualPlan?.currentContent?.versionNumber;
     const isViewingOldVersion = selectedVersion != null && latestVersion != null && selectedVersion !== latestVersion;
-    const fullName = `${client.firstName} ${client.lastName}`;
+    const fullName = formatClientName(client);
 
     const showVersion = async (versionNumber) => {
         setSelectedVersion(versionNumber);
@@ -267,7 +272,7 @@ function IndividualPlan() {
                     </div>
                 </div>
                 {!isEditing && individualPlan && (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 print:hidden">
                         {versions.length > 1 && (
                             <Select value={selectedVersion ? String(selectedVersion) : ""} onValueChange={(version) => showVersion(Number(version))}>
                                 <SelectTrigger className="w-auto min-w-44" aria-label="Verze plánu">
@@ -282,6 +287,7 @@ function IndividualPlan() {
                                 </SelectContent>
                             </Select>
                         )}
+                        <Button variant="secondary" size="icon" aria-label="Tisk" onClick={() => window.print()}><IconPrinter /></Button>
                         {canEdit && <Button onClick={startEditing}><IconPlus /> Nová verze</Button>}
                     </div>
                 )}
@@ -336,12 +342,12 @@ function IndividualPlan() {
                             </div>
                         </form>
                     ) : individualPlan ? (
-                        <div className="grid gap-10">
-                            <div className="grid items-start gap-6 lg:grid-cols-3">
+                        <div className="grid gap-10 print:block">
+                            <div className="grid items-start gap-6 lg:grid-cols-3 print:flex print:flex-col">
                                 <div className={cn("grid gap-6 transition-opacity duration-fast lg:col-span-2", isPlanLoading && "opacity-60")}>
                                     {currentContent && <PlanSectionsView content={currentContent} />}
                                 </div>
-                                <div className="grid gap-6">
+                                <div className="grid gap-6 print:order-first">
                                     {currentContent && (
                                         <Card>
                                             <CardHeader>

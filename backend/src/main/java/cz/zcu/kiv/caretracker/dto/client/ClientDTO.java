@@ -1,6 +1,7 @@
 package cz.zcu.kiv.caretracker.dto.client;
 
 import cz.zcu.kiv.caretracker.dto.department.DepartmentSummaryDTO;
+import cz.zcu.kiv.caretracker.dto.department.SupportedHousingSummaryDTO;
 import cz.zcu.kiv.caretracker.dto.task.TaskDTO;
 import cz.zcu.kiv.caretracker.dto.employee.EmployeeSummaryDTO;
 import lombok.AllArgsConstructor;
@@ -17,7 +18,7 @@ public class ClientDTO {
     private String firstName;
     private String lastName;
     private String gender;
-    private Long personalNumber;
+    private String personalNumber;
     private LocalDate dateOfBirth;
     private LocalDate terminationDate;
     private String terminationReason;
@@ -40,4 +41,24 @@ public class ClientDTO {
     private DepartmentSummaryDTO department;
     private EmployeeSummaryDTO caregiver;
     private List<TaskDTO> tasks;
+    private String accommodationType;
+    private SupportedHousingSummaryDTO supportedHousing;
+    private Integer travelDistanceKm;
+    private Boolean hasElevator;
+    private String floorOrRoom;
+    private String accessMethod;
+    private String lockCode;
+    private String accessNote;
+    private String titleBefore;
+    private String titleAfter;
+    private String phone2;
+    private String guardianName;
+    private String guardianContact;
+    private LocalDate careFrom;
+    private LocalDate careTo;
+    private LocalDate contractFrom;
+    private LocalDate contractTo;
+    private Boolean contractIndefinite;
+    private Boolean noCharge;
+    private LocalDate intakeAssessmentDate;
 }

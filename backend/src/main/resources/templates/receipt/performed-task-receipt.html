@@ -121,6 +121,12 @@
             </tr>
         </table>
 
+        <table class="payment" th:if="${noCharge}">
+            <tr>
+                <td>Služba je poskytována bez úhrady</td>
+            </tr>
+        </table>
+
         <table class="signatures">
             <tr>
                 <td style="padding-left: 0;"><div class="signature-line">Datum převzetí</div></td>

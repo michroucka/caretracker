@@ -25,6 +25,11 @@ import java.util.Optional;
  */
 @Service
 public class DepartmentService extends BaseRoleFilteringService<Department, DepartmentDTO> {
+
+    /** Department numbers prefix client personal numbers with exactly two digits. */
+    private static final int MIN_DEPARTMENT_NUMBER = 1;
+    private static final int MAX_DEPARTMENT_NUMBER = 99;
+    public static final String DUPLICATE_DEPARTMENT_NUMBER_MESSAGE = "Středisko s tímto číslem už v organizaci existuje";
     @Autowired
     private DepartmentRepository departmentRepository;
     @Autowired
@@ -37,6 +42,8 @@ public class DepartmentService extends BaseRoleFilteringService<Department, Depa
     private UserRepository userRepository;
     @Autowired
     private ClientRepository clientRepository;
+    @Autowired
+    private PersonalNumberGenerator personalNumberGenerator;
 
     /**
      * Returns departments filtered by role and optional criteria.
@@ -146,6 +153,8 @@ public class DepartmentService extends BaseRoleFilteringService<Department, Depa
             organization = employee.getOrganization();
         }
 
+        validateDepartmentNumber(department, dto.getDepartmentNumber(), organization);
+
         Employee oldCoordinator = department.getCoordinator();
 
         Employee coordinator = dto.getCoordinatorId() != null
@@ -168,6 +177,35 @@ public class DepartmentService extends BaseRoleFilteringService<Department, Depa
         updateCoordinatorRoles(oldCoordinator, coordinator);
 
         return saved;
+    }
+
+    /**
+     * Personal number the next new client of the department would get, shown in the client form before saving.
+     *
+     * @param id the department ID
+     * @return the six-digit personal number
+     */
+    @Transactional(readOnly = true)
+    public String nextPersonalNumber(Long id) {
+        Department department = departmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Oddělení nebylo nalezeno"));
+        validateDepartmentAccess(department, dep -> dep.getOrganization().getId(), Department::getId);
+        return personalNumberGenerator.next(department);
+    }
+
+    private void validateDepartmentNumber(Department department, Integer departmentNumber, Organization organization) {
+        if (departmentNumber == null) {
+            throw new ValidationException("Číslo střediska je povinné");
+        }
+        if (departmentNumber < MIN_DEPARTMENT_NUMBER || departmentNumber > MAX_DEPARTMENT_NUMBER) {
+            throw new ValidationException("Číslo střediska musí být mezi " + MIN_DEPARTMENT_NUMBER + " a " + MAX_DEPARTMENT_NUMBER);
+        }
+        boolean numberTaken = department.getId() == null
+                ? departmentRepository.existsByOrganizationIdAndDepartmentNumber(organization.getId(), departmentNumber)
+                : departmentRepository.existsByOrganizationIdAndDepartmentNumberAndIdNot(organization.getId(), departmentNumber, department.getId());
+        if (numberTaken) {
+            throw new ValidationException(DUPLICATE_DEPARTMENT_NUMBER_MESSAGE);
+        }
     }
 
     /**

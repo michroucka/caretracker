@@ -1,5 +1,6 @@
 package cz.zcu.kiv.caretracker.controller;
 
+import cz.zcu.kiv.caretracker.dto.task.StatutoryTaskImportRequestDTO;
 import cz.zcu.kiv.caretracker.dto.task.TaskDTO;
 import cz.zcu.kiv.caretracker.dto.task.TaskRequestDTO;
 import cz.zcu.kiv.caretracker.entity.Task;
@@ -54,6 +55,16 @@ public class TaskController {
         log.info("Creating new task");
         Task savedTask = taskService.createTask(dto);
         return ResponseEntity.ok(taskMapper.toDTO(savedTask));
+    }
+
+    @PostMapping("/import-statutory")
+    @PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN')")
+    public ResponseEntity<List<TaskDTO>> importStatutoryTasks(
+            @RequestParam(required = false) Long organizationId, @RequestBody StatutoryTaskImportRequestDTO request
+    ) {
+        log.info("Importing statutory tasks into organization: {}", organizationId);
+        List<Task> created = taskService.importStatutoryTasks(organizationId, request.statutoryTaskIds());
+        return ResponseEntity.ok(taskMapper.toDTOList(created));
     }
 
     @PutMapping("/{id}")

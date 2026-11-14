@@ -13,7 +13,7 @@ public class ClientRequestDTO {
     private String firstName;
     private String lastName;
     private String gender;
-    private Long personalNumber;
+    private String personalNumber;
     private LocalDate dateOfBirth;
     private String email;
     private String phone;
@@ -30,5 +30,24 @@ public class ClientRequestDTO {
     private List<Long> taskIds;
     private LocalDate terminationDate;
     private String terminationReason;
+    private String accommodationType;
+    private Long supportedHousingId;
+    private Integer travelDistanceKm;
+    private Boolean hasElevator;
+    private String floorOrRoom;
+    private String accessMethod;
+    private String lockCode;
+    private String accessNote;
+    private String titleBefore;
+    private String titleAfter;
+    private String phone2;
+    private String guardianName;
+    private String guardianContact;
+    private LocalDate careFrom;
+    private LocalDate careTo;
+    private LocalDate contractFrom;
+    private LocalDate contractTo;
+    private Boolean contractIndefinite;
+    private Boolean noCharge;
+    private LocalDate intakeAssessmentDate;
 }
-

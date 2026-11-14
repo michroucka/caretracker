@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server } from "@/test/server";
-import { deleteImage, deleteJSON, fetchImage, get, getJSON, post, postJSON, putJSON, uploadFile, userMessageOf } from "./api";
+import { deleteImage, deleteJSON, downloadFile, fetchImage, get, getJSON, post, postJSON, putJSON, uploadFile, userMessageOf } from "./api";
 
 function setCsrfCookie(value) {
     document.cookie = `XSRF-TOKEN=${value}; path=/`;
@@ -255,6 +255,49 @@ describe("api – successful responses", () => {
         await expect(uploadFile("/clients", file)).resolves.toEqual({ id: 77 });
         expect(append).toHaveBeenCalledWith("file", file);
         append.mockRestore();
+    });
+
+    it("uploadFile sends the extra fields next to the file", async () => {
+        const append = vi.spyOn(FormData.prototype, "append");
+        respondWith("post", () => HttpResponse.json({ id: 77 }));
+
+        await uploadFile("/clients", photo(), { type: "CONTRACT" });
+
+        expect(append).toHaveBeenCalledWith("type", "CONTRACT");
+        append.mockRestore();
+    });
+});
+
+describe("api – downloadFile", () => {
+    beforeEach(() => {
+        URL.createObjectURL = vi.fn(() => "blob:http://localhost/file");
+        URL.revokeObjectURL = vi.fn();
+    });
+
+    afterEach(() => {
+        delete URL.createObjectURL;
+        delete URL.revokeObjectURL;
+        vi.restoreAllMocks();
+    });
+
+    it("saves the response through a link named after the file", async () => {
+        server.use(http.get(apiUrl("/clients/7/documents/1"), () => new HttpResponse("pdf", { headers: { "Content-Type": "application/pdf" } })));
+        const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+            expect(this.download).toBe("smlouva.pdf");
+            expect(this.href).toBe("blob:http://localhost/file");
+        });
+
+        await downloadFile("/clients/7/documents/1", "smlouva.pdf");
+
+        expect(click).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/file"));
+    });
+
+    it("throws the server message and saves nothing on an error", async () => {
+        server.use(http.get(apiUrl("/clients/7/documents/1"), () => HttpResponse.json({ message: "Dokument nebyl nalezen" }, { status: 404 })));
+
+        await expect(downloadFile("/clients/7/documents/1", "smlouva.pdf")).rejects.toThrow("Dokument nebyl nalezen");
+        expect(URL.createObjectURL).not.toHaveBeenCalled();
     });
 });
 

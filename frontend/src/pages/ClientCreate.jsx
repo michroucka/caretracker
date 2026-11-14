@@ -11,11 +11,14 @@ import { ClientFields } from "@/components/clients/ClientFields";
 import { emptyClient, toRequest, validateClient } from "@/components/clients/clientForm";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { getJSON } from "@/api/api.js";
 
 export function ClientCreate() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const form = useRecordForm(emptyClient(user.departmentId));
+    const { setField } = form;
+    const lastPrefilledNumber = React.useRef("");
 
     const { createClient } = useClients();
     const { departments, fetchDepartments } = useDepartments();
@@ -29,6 +32,29 @@ export function ClientCreate() {
         // options are loaded once
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const personalNumberRef = React.useRef(form.values.personalNumber);
+    React.useEffect(() => {
+        personalNumberRef.current = form.values.personalNumber;
+    }, [form.values.personalNumber]);
+
+    const departmentId = form.values.departmentId;
+    React.useEffect(() => {
+        if (!departmentId) return;
+        let isOutdated = false;
+
+        getJSON(`/departments/${departmentId}/next-personal-number`)
+            .then((response) => {
+                if (isOutdated) return;
+                if (personalNumberRef.current !== lastPrefilledNumber.current) return;
+
+                setField("personalNumber", response.personalNumber);
+                lastPrefilledNumber.current = response.personalNumber;
+            })
+            .catch(() => {});
+
+        return () => { isOutdated = true; };
+    }, [departmentId, setField]);
 
     const save = (event) => {
         event.preventDefault();

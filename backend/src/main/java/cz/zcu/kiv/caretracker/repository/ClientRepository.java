@@ -23,10 +23,17 @@ public interface ClientRepository extends JpaRepository<Client, Long>, JpaSpecif
 
     List<Client> findByDepartmentId(Long departmentId);
 
+    List<Client> findBySupportedHousingId(Long supportedHousingId);
+
     List<Client> findByOrganizationId(Long organizationId);
 
-    boolean existsByPersonalNumberAndOrganizationIdAndActiveTrue(Long personalNumber, Long organizationId);
-    boolean existsByPersonalNumber(Long personalNumber);
+    boolean existsByPersonalNumberAndOrganizationId(String personalNumber, Long organizationId);
+    boolean existsByPersonalNumberAndOrganizationIdAndIdNot(String personalNumber, Long organizationId, Long id);
+
+    /** Highest personal number in the organization starting with the prefix, or null when there is none. */
+    @Query("SELECT MAX(c.personalNumber) FROM Client c WHERE c.organization.id = :organizationId AND c.personalNumber LIKE CONCAT(:prefix, '%')")
+    String findHighestPersonalNumber(@Param("organizationId") Long organizationId, @Param("prefix") String prefix);
+
     boolean existsByDepartmentIdAndActiveTrue(Long departmentId);
     long countByActiveTrueAndCaregiverId(Long caregiverId);
     long countByActiveTrueAndDepartmentId(Long departmentId);

@@ -14,4 +14,8 @@ public class TaskDTO {
     private String unitType;
     private Boolean doubleMeeting;
     private Boolean active;
+    private Long statutoryTaskId;
+    private String statutoryTaskCode;
+    private String statutoryTaskName;
+    private Integer statutoryMaxUnitPrice;
 }

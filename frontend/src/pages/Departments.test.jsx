@@ -29,7 +29,11 @@ const CAREGIVER_MARIE = { id: 42, firstName: 'Marie', lastName: 'Nová', role: '
 function serveDepartments(departments = [PLZEN, KLATOVY]) {
     const departmentRequests = serveAndRecord('get', '/departments', () => HttpResponse.json(departments));
     const employeeRequests = serveAndRecord('get', '/employees', () => HttpResponse.json([COORDINATOR_PETR, CAREGIVER_MARIE]));
-    server.use(http.get(apiUrl('/departments/:id'), ({ params }) => HttpResponse.json(departments.find((item) => item.id === Number(params.id)))));
+    server.use(
+        http.get(apiUrl('/departments/:id'), ({ params }) => HttpResponse.json(departments.find((item) => item.id === Number(params.id)))),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([])),
+    );
     return { departmentRequests, employeeRequests };
 }
 
@@ -141,6 +145,7 @@ describe('Departments', () => {
             const dialog = await openCreateDialog(user);
             await user.type(within(dialog).getByRole('textbox', { name: 'Ulice a číslo popisné' }), 'Masarykova 1');
             await user.type(within(dialog).getByRole('textbox', { name: 'Město' }), 'Rokycany');
+            await user.type(within(dialog).getByRole('textbox', { name: 'Číslo střediska' }), '4');
             await user.click(within(dialog).getByRole('button', { name: 'Vytvořit středisko' }));
 
             await waitFor(() => expect(creates).toHaveLength(1));
@@ -230,10 +235,12 @@ describe('Departments', () => {
             await user.click(within(dialog).getByRole('button', { name: 'Vytvořit středisko' }));
             expect(within(dialog).getByText('Prosím zadejte ulici')).toBeInTheDocument();
             expect(within(dialog).getByText('Prosím zadejte město')).toBeInTheDocument();
+            expect(within(dialog).getByText('Číslo střediska je povinné')).toBeInTheDocument();
             expect(creates).toHaveLength(0);
 
             await user.type(within(dialog).getByRole('textbox', { name: 'Ulice a číslo popisné' }), ' Masarykova 1 ');
             await user.type(within(dialog).getByRole('textbox', { name: 'Město' }), 'Rokycany');
+            await user.type(within(dialog).getByRole('textbox', { name: 'Číslo střediska' }), '4');
             await user.type(within(dialog).getByRole('textbox', { name: 'PSČ' }), '33701');
             const employeeRequestsBefore = employeeRequests.length;
             await user.click(within(dialog).getByRole('button', { name: 'Vytvořit středisko' }));
@@ -243,7 +250,7 @@ describe('Departments', () => {
                 street: 'Masarykova 1',
                 city: 'Rokycany',
                 postalCode: '337 01',
-                departmentNumber: null,
+                departmentNumber: 4,
                 coordinatorId: null,
                 organizationId: null,
             });
@@ -260,6 +267,7 @@ describe('Departments', () => {
             const dialog = await openCreateDialog(user);
             await user.type(within(dialog).getByRole('textbox', { name: 'Ulice a číslo popisné' }), 'Masarykova 1');
             await user.type(within(dialog).getByRole('textbox', { name: 'Město' }), 'Rokycany');
+            await user.type(within(dialog).getByRole('textbox', { name: 'Číslo střediska' }), '4');
             await user.click(within(dialog).getByRole('button', { name: 'Vytvořit středisko' }));
 
             expect(await screen.findByText('Chyba při vytváření střediska')).toBeInTheDocument();

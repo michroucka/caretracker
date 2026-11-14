@@ -23,3 +23,26 @@ export const terminationReasonOptions = [
     {name: "Dohoda o ukončení", key: "MUTUAL_AGREEMENT"},
     {name: "Jiné", key: "OTHER"}
 ];
+
+export const accommodationTypeOptions = [
+    {name: "Dům s pečovatelskou službou (DPS)", key: "SUPPORTED_HOUSING"},
+    {name: "Nájemní byt", key: "RENTED_FLAT"},
+    {name: "Obecní byt", key: "MUNICIPAL_FLAT"},
+    {name: "Rodinný dům", key: "FAMILY_HOUSE"},
+    {name: "Vlastní byt", key: "OWN_FLAT"},
+    {name: "U příbuzných", key: "WITH_RELATIVES"}
+];
+
+export const accessMethodOptions = [
+    {name: "Zvonek", key: "DOORBELL"},
+    {name: "Klíče", key: "KEYS"},
+    {name: "Zavolat", key: "PHONE_CALL"},
+    {name: "Jiný", key: "OTHER"}
+];
+
+export const documentTypeOptions = [
+    {name: "Smlouva", key: "CONTRACT"},
+    {name: "Vstupní šetření", key: "INTAKE_ASSESSMENT"},
+    {name: "Souhlas s klíči", key: "KEY_CONSENT"},
+    {name: "Jiný", key: "OTHER"}
+];

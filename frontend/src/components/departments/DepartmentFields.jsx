@@ -22,9 +22,10 @@ export function DepartmentFields({ idPrefix, values, errors, onChange, disabled,
                     )}
                 </FormField>
             </div>
-            <FormField id={`${idPrefix}-number`} label="Číslo střediska" hint="Interní číslo, nepovinné.">
+            <FormField id={`${idPrefix}-number`} label="Číslo střediska" required error={errors.departmentNumber} shakeSignal={shakeSignal}
+                hint="Číslo 1 až 99, jedinečné v organizaci. Začínají jím osobní čísla klientů střediska.">
                 {(controlProps) => (
-                    <Input {...controlProps} inputMode="numeric" className="max-w-32" disabled={disabled} value={values.departmentNumber}
+                    <Input {...controlProps} inputMode="numeric" maxLength={2} className="max-w-32" disabled={disabled} value={values.departmentNumber}
                         onChange={(event) => onChange("departmentNumber", event.target.value.replace(/\D/g, ""))} />
                 )}
             </FormField>

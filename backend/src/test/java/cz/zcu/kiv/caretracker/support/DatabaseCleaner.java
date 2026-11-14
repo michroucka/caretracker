@@ -8,6 +8,7 @@ import java.util.List;
 /**
  * Empties all application tables, including the dummy data inserted by Flyway migrations,
  * so every integration test starts from an empty database and creates only what it needs.
+ * The statutory catalog (decree 505/2006 Sb.) is reference data from a migration and stays.
  */
 @TestComponent
 public class DatabaseCleaner {
@@ -31,7 +32,7 @@ public class DatabaseCleaner {
                 SELECT quote_ident(table_name) FROM information_schema.tables
                 WHERE table_schema = 'public'
                   AND table_type = 'BASE TABLE'
-                  AND table_name <> 'flyway_schema_history'
+                  AND table_name NOT IN ('flyway_schema_history', 'statutory_task', 'statutory_hourly_limit')
                 """, String.class);
         return "TRUNCATE TABLE " + String.join(", ", tables) + " RESTART IDENTITY CASCADE";
     }

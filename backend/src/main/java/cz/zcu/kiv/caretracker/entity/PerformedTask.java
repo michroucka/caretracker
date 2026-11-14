@@ -85,9 +85,14 @@ public class PerformedTask {
     }
 
     public int calculatePrice() {
+        return price(getUnitCount(), getUnitPrice(), getTask().getUnitType());
+    }
+
+    /** Price of an amount (minutes for HOUR tasks) at a unit price, rounded to whole crowns. */
+    public static int price(double unitCount, int unitPrice, UnitType unitType) {
         // decimal arithmetic: in double 0.29 * 50 is 14.4999... and would round down; matches ROUND on NUMERIC in the dashboard queries
-        BigDecimal amount = BigDecimal.valueOf(getUnitCount()).multiply(BigDecimal.valueOf(getUnitPrice()));
-        BigDecimal price = getTask().getUnitType() == UnitType.HOUR
+        BigDecimal amount = BigDecimal.valueOf(unitCount).multiply(BigDecimal.valueOf(unitPrice));
+        BigDecimal price = unitType == UnitType.HOUR
                 ? amount.divide(MINUTES_PER_HOUR, 0, RoundingMode.HALF_UP)
                 : amount.setScale(0, RoundingMode.HALF_UP);
         return price.intValueExact();

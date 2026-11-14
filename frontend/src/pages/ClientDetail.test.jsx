@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,12 @@ import { renderWithProviders } from '@/test/render';
 import { serveAndRecord, serverError } from '@/test/hooks';
 import { apiUrl, server } from '@/test/server';
 import { admin, caregiver, coordinator } from '@/test/users';
+import { shrinkPhoto } from '@/lib/pictures';
+
+vi.mock('@/lib/pictures', async (importOriginal) => {
+    const actual = await importOriginal();
+    return { ...actual, shrinkPhoto: vi.fn(actual.shrinkPhoto) };
+});
 
 const PLZEN = { id: 2, city: 'Plzeň' };
 
@@ -16,7 +22,7 @@ const MARIE = {
     lastName: 'Nová',
     gender: 'FEMALE',
     dateOfBirth: '1940-03-15',
-    personalNumber: 1234,
+    personalNumber: '010034',
     legallyCompetent: true,
     street: 'Americká 12',
     city: 'Plzeň',
@@ -39,19 +45,35 @@ const MARIE = {
     terminationReason: null,
 };
 
+const ACCOMMODATION = {
+    accommodationType: 'SUPPORTED_HOUSING',
+    supportedHousing: { id: 5, name: 'DPS Slovany' },
+    travelDistanceKm: 12,
+    hasElevator: true,
+    floorOrRoom: '2. patro',
+    accessMethod: 'KEYS',
+    lockCode: '4821',
+    accessNote: 'Klíče u vrátného',
+};
+
 const TERMINATED_MARIE = { ...MARIE, active: false, terminationDate: '2026-10-31', terminationReason: 'EXITUS' };
 
 /** Serves the client from a variable, so a reload after an action shows what the server changed. */
-function serveClient(initialClient) {
+function serveClient(initialClient, { housingActive = true, documents = [] } = {}) {
     let storedClient = initialClient;
+    const documentRequests = serveAndRecord('get', '/clients/:id/documents', () => HttpResponse.json(documents));
     server.use(
         http.get(apiUrl('/clients/:id'), () => HttpResponse.json(storedClient)),
         http.get(apiUrl('/departments'), () => HttpResponse.json([PLZEN])),
         http.get(apiUrl('/employees'), () => HttpResponse.json([{ id: 10, firstName: 'Jana', lastName: 'Testová', department: PLZEN }])),
         http.get(apiUrl('/tasks'), () => HttpResponse.json([{ id: 40, name: 'Nákup' }, { id: 41, name: 'Úklid' }])),
+        http.get(apiUrl('/departments/:id/municipalities'), () => HttpResponse.json([{ id: 1, name: 'Plzeň' }])),
+        http.get(apiUrl('/departments/:id/supported-housings'), () => HttpResponse.json([
+            { id: 5, name: 'DPS Slovany', street: 'Americká 12', city: 'Plzeň', postalCode: '30100', active: housingActive },
+        ])),
     );
     const listReloads = serveAndRecord('get', '/clients', () => HttpResponse.json([]));
-    return { listReloads, changeTo: (client) => { storedClient = client; } };
+    return { listReloads, documentRequests, changeTo: (client) => { storedClient = client; } };
 }
 
 function renderDetail(authStatus = admin()) {
@@ -89,7 +111,7 @@ describe('ClientDetail – view', () => {
         expect(screen.getByText('Aktivní')).toBeInTheDocument();
         expect(detailValue('Datum narození')).toHaveTextContent('15. 3. 1940 (86 let)');
         expect(detailValue('Pohlaví')).toHaveTextContent('Žena');
-        expect(detailValue('Osobní číslo')).toHaveTextContent('1234');
+        expect(detailValue('Osobní číslo')).toHaveTextContent('010034');
         expect(detailValue('Svéprávný')).toHaveTextContent('Ano');
         expect(detailValue('Adresa')).toHaveTextContent('Americká 1230100 Plzeň');
         expect(screen.getByRole('link', { name: '777123456' })).toHaveAttribute('href', 'tel:777123456');
@@ -103,6 +125,92 @@ describe('ClientDetail – view', () => {
         expect(screen.getByText('2 úkony')).toBeInTheDocument();
         expect(screen.getByText('Úklid')).toBeInTheDocument();
         expect(screen.queryByText('Ukončení smlouvy')).not.toBeInTheDocument();
+    });
+
+    it('shows the name with titles in the heading', async () => {
+        serveClient({ ...MARIE, firstName: 'Jana', titleBefore: 'Mgr.', titleAfter: 'DiS.' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByRole('heading', { level: 1, name: 'Mgr. Jana Nová, DiS.' })).toBeInTheDocument();
+    });
+
+    it('shows the guardian only of a client who is not legally competent', async () => {
+        serveClient({ ...MARIE, legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: '603 111 222' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Opatrovník', { selector: 'h2, h3, [data-slot="card-title"]' })).toBeInTheDocument();
+        expect(detailValue('Kontakt na opatrovníka')).toHaveTextContent('603 111 222');
+    });
+
+    it('shows an indefinite contract without an end', async () => {
+        serveClient({ ...MARIE, contractFrom: '2026-01-01', contractIndefinite: true, contractTo: null });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Smlouva', { selector: '[data-slot="card-title"]' })).toBeInTheDocument();
+        expect(detailValue('Smlouva od')).toHaveTextContent('1. 1. 2026');
+        expect(detailValue('Doba smlouvy')).toHaveTextContent('Neurčitá');
+    });
+
+    it('shows the end of a fixed-term contract', async () => {
+        serveClient({ ...MARIE, contractFrom: '2026-01-01', contractIndefinite: false, contractTo: '2026-12-31' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Doba smlouvy', { selector: 'dt' })).toBeInTheDocument();
+        expect(detailValue('Doba smlouvy')).toHaveTextContent('Určitá, do 31. 12. 2026');
+    });
+
+    it('keeps the stored contract and no-charge flags when saving an unrelated change', async () => {
+        serveClient({ ...MARIE, contractIndefinite: false, contractFrom: '2026-01-01', contractTo: '2026-12-31', noCharge: true });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+        await user.type(screen.getByLabelText(/^Praktický lékař/), 'MUDr. Dvořák');
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body).toMatchObject({ contractIndefinite: false, contractFrom: '2026-01-01', contractTo: '2026-12-31', noCharge: true });
+    });
+
+    it('shows the accommodation including the lock code', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Druh ubytování')).toHaveTextContent('Dům s pečovatelskou službou (DPS)');
+        expect(detailValue('Dům s pečovatelskou službou')).toHaveTextContent('DPS Slovany');
+        expect(detailValue('Patro nebo pokoj')).toHaveTextContent('2. patro');
+        expect(detailValue('Výtah v domě')).toHaveTextContent('Ano');
+        expect(detailValue('Přístup do bytu')).toHaveTextContent('Klíče');
+        expect(detailValue('Kód od zámku')).toHaveTextContent('4821');
+        expect(detailValue('Poznámka k přístupu')).toHaveTextContent('Klíče u vrátného');
+        expect(detailValue('Dojezdová vzdálenost')).toHaveTextContent('12 km');
+    });
+
+    it('shows dashes for accommodation that was not filled in', async () => {
+        serveClient({ ...MARIE, accommodationType: null, supportedHousing: null, travelDistanceKm: null, hasElevator: null, lockCode: null });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Druh ubytování')).toHaveTextContent('–');
+        expect(detailValue('Kód od zámku')).toHaveTextContent('–');
+        expect(detailValue('Výtah v domě')).toHaveTextContent('–');
+        expect(screen.queryByText('Dům s pečovatelskou službou', { selector: 'dt' })).not.toBeInTheDocument();
+    });
+
+    it('tells a house without an elevator from an unknown one', async () => {
+        serveClient({ ...MARIE, hasElevator: false });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(detailValue('Výtah v domě')).toHaveTextContent('Ne');
     });
 
     it('shows when and why the contract of a terminated client ended', async () => {
@@ -187,6 +295,39 @@ describe('ClientDetail – edit', () => {
         expect(await screen.findByRole('heading', { level: 1, name: 'Marie Nová' })).toBeInTheDocument();
         expect(await screen.findByRole('link', { name: '603 999 888' })).toBeInTheDocument();
         expect(screen.getByText('Klient úspěšně aktualizován')).toBeInTheDocument();
+    });
+
+    it('edits the accommodation with the house address locked', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+
+        expect(screen.getByLabelText(/^Kód od zámku/)).toHaveValue('4821');
+        await waitFor(() => expect(screen.getByLabelText(/^Dům s pečovatelskou službou/)).toHaveTextContent('DPS Slovany'));
+        expect(screen.getByLabelText(/^Ulice a číslo popisné/)).toHaveAttribute('readonly');
+
+        await user.clear(screen.getByLabelText(/^Kód od zámku/));
+        await user.type(screen.getByLabelText(/^Kód od zámku/), '9999');
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body).toMatchObject({ accommodationType: 'SUPPORTED_HOUSING', supportedHousingId: 5, lockCode: '9999', travelDistanceKm: 12, hasElevator: true });
+    });
+
+    it('keeps a terminated house of the client in the form and saves without choosing another', async () => {
+        serveClient({ ...MARIE, ...ACCOMMODATION }, { housingActive: false });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+
+        await waitFor(() => expect(screen.getByLabelText(/^Dům s pečovatelskou službou/)).toHaveTextContent('DPS Slovany (ukončený)'));
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body.supportedHousingId).toBe(5);
     });
 
     it('does not save an invalid form', async () => {
@@ -314,5 +455,218 @@ describe('ClientDetail – contract', () => {
         expect(activations[0].path).toMatch(/\/clients\/7\/activate$/);
         await waitFor(() => expect(screen.queryByText('Ukončení smlouvy')).not.toBeInTheDocument());
         expect(screen.getByText('Klient úspěšně aktivován')).toBeInTheDocument();
+    });
+});
+
+const CONTRACT_DOCUMENT = {
+    id: 1,
+    type: 'CONTRACT',
+    fileName: 'smlouva.pdf',
+    contentType: 'application/pdf',
+    size: 2048,
+    uploadedAt: '2026-11-01T10:30:00',
+    uploadedByName: 'Jana Testová',
+};
+
+const pdfFile = (name = 'souhlas.pdf', type = 'application/pdf') => new File(['x'], name, { type });
+
+async function chooseDocumentType(user, label) {
+    await user.click(await screen.findByRole('combobox', { name: 'Typ dokumentu' }));
+    await user.click(await screen.findByRole('option', { name: label }));
+}
+
+describe('ClientDetail – documents', () => {
+    it('does not show the documents to a caregiver and does not even ask for them', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(screen.queryByText('Dokumenty', { selector: '[data-slot="card-title"]' })).not.toBeInTheDocument();
+        expect(documentRequests).toHaveLength(0);
+    });
+
+    it('does not show the documents to a coordinator of another department and does not ask for them', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(coordinator({ departmentId: PLZEN.id + 1 }));
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(screen.queryByText('Dokumenty', { selector: '[data-slot="card-title"]' })).not.toBeInTheDocument();
+        expect(documentRequests).toHaveLength(0);
+    });
+
+    it.each([['coordinator', coordinator()], ['admin', admin()]])('lists the documents for the %s', async (_, authStatus) => {
+        serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(authStatus);
+
+        expect(await screen.findByText('smlouva.pdf')).toBeInTheDocument();
+        expect(screen.getByText(/Smlouva · 1\. 11\. 2026 · Jana Testová/)).toBeInTheDocument();
+    });
+
+    it('says there are no documents yet', async () => {
+        serveClient(MARIE);
+
+        renderDetail();
+
+        expect(await screen.findByText('Klient zatím nemá žádné dokumenty.')).toBeInTheDocument();
+    });
+
+    it('uploads the chosen file with its type and shows the refreshed list', async () => {
+        const { documentRequests } = serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const append = vi.spyOn(FormData.prototype, 'append');
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+        const file = pdfFile();
+
+        await chooseDocumentType(user, 'Souhlas s klíči');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), file);
+
+        expect(await screen.findByText('Dokument nahrán')).toBeInTheDocument();
+        expect(uploads).toHaveLength(1);
+        expect(append).toHaveBeenCalledWith('file', file);
+        expect(append).toHaveBeenCalledWith('type', 'KEY_CONSENT');
+        expect(documentRequests).toHaveLength(2);
+        append.mockRestore();
+    });
+
+    it('cannot pick a file before the type is chosen', async () => {
+        serveClient(MARIE);
+
+        renderDetail();
+
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+        expect(screen.getByLabelText('Soubor dokumentu')).toBeDisabled();
+    });
+
+    it.each([
+        ['a file of another type', pdfFile('text.txt', 'text/plain'), 'Nahrát lze jen PDF, JPEG nebo PNG'],
+        ['a PDF over 10 MB', Object.defineProperty(pdfFile(), 'size', { value: 10 * 1024 * 1024 + 1 }), 'Soubor je příliš velký. Maximální velikost je 10 MB'],
+    ])('refuses %s without sending it', async (_, file, message) => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        // user.upload would drop the file of another type because of the input's accept attribute
+        fireEvent.change(screen.getByLabelText('Soubor dokumentu'), { target: { files: [file] } });
+
+        expect(await screen.findByText(message)).toBeInTheDocument();
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('shrinks a photo before uploading it and keeps its name with a .jpg extension', async () => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const photo = new File(['pixels'], 'souhlas-klice.png', { type: 'image/png' });
+        Object.defineProperty(photo, 'size', { value: 12 * 1024 * 1024 });
+        shrinkPhoto.mockResolvedValueOnce(new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' }));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Souhlas s klíči');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), photo);
+
+        await waitFor(() => expect(uploads).toHaveLength(1));
+        expect(shrinkPhoto).toHaveBeenCalledWith(photo, { maxEdge: 2400 });
+        // jsdom serializes the multipart body as text, only the file name is visible in it
+        expect(uploads[0].body).toContain('file=souhlas-klice.jpg');
+    });
+
+    it('shows why a photo could not be processed and sends nothing', async () => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        shrinkPhoto.mockRejectedValueOnce(new Error('Tento formát fotky prohlížeč neumí otevřít. Uložte ji prosím jako JPG a zkuste to znovu.'));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), new File(['pixels'], 'sken.jpg', { type: 'image/jpeg' }));
+
+        expect(await screen.findByText(/Tento formát fotky prohlížeč neumí otevřít/)).toBeInTheDocument();
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('shows the server message when the upload fails', async () => {
+        serveClient(MARIE);
+        serveAndRecord('post', '/clients/:id/documents', serverError('Soubor je prázdný', 400));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), pdfFile());
+
+        expect(await screen.findByText('Soubor je prázdný')).toBeInTheDocument();
+    });
+
+    it('deletes a document only after confirmation', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+        const deletes = serveAndRecord('delete', '/clients/:id/documents/:documentId', () => new HttpResponse(null, { status: 204 }));
+        const { user } = renderDetail();
+
+        await user.click(await screen.findByRole('button', { name: 'Smazat dokument smlouva.pdf' }));
+        expect(deletes).toHaveLength(0);
+        const dialog = await screen.findByRole('alertdialog');
+        await user.click(within(dialog).getByRole('button', { name: 'Smazat' }));
+
+        expect(await screen.findByText('Dokument smazán')).toBeInTheDocument();
+        expect(deletes[0].path).toBe('/api/clients/7/documents/1');
+        expect(documentRequests).toHaveLength(2);
+    });
+
+    it('downloads a document through the API', async () => {
+        serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+        const downloads = serveAndRecord('get', '/clients/:id/documents/:documentId', () => new HttpResponse('pdf', { headers: { 'Content-Type': 'application/pdf' } }));
+        URL.createObjectURL = vi.fn(() => 'blob:http://localhost/file');
+        URL.revokeObjectURL = vi.fn();
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const { user } = renderDetail();
+
+        await user.click(await screen.findByRole('button', { name: 'Stáhnout dokument smlouva.pdf' }));
+
+        await waitFor(() => expect(click).toHaveBeenCalled());
+        expect(downloads[0].path).toBe('/api/clients/7/documents/1');
+        click.mockRestore();
+        delete URL.createObjectURL;
+        delete URL.revokeObjectURL;
+    });
+
+    it.each([
+        ['a PDF in a frame', CONTRACT_DOCUMENT, 'application/pdf', () => screen.getByTitle('Náhled dokumentu smlouva.pdf')],
+        ['an image', { ...CONTRACT_DOCUMENT, fileName: 'klice.jpg', contentType: 'image/jpeg' }, 'image/jpeg', () => screen.getByRole('img', { name: 'Náhled dokumentu klice.jpg' })],
+    ])('previews %s in the application', async (_, document, contentType, preview) => {
+        serveClient(MARIE, { documents: [document] });
+        const previews = serveAndRecord('get', '/clients/:id/documents/:documentId', () => new HttpResponse('data', { headers: { 'Content-Type': contentType } }));
+        URL.createObjectURL = vi.fn(() => 'blob:http://localhost/preview');
+        URL.revokeObjectURL = vi.fn();
+        try {
+            const { user } = renderDetail();
+
+            await user.click(await screen.findByRole('button', { name: `Zobrazit dokument ${document.fileName}` }));
+
+            expect(await screen.findByRole('dialog', { name: document.fileName })).toBeInTheDocument();
+            await waitFor(() => expect(preview()).toHaveAttribute('src', 'blob:http://localhost/preview'));
+            expect(previews[0].path).toBe('/api/clients/7/documents/1');
+            expect(URL.createObjectURL.mock.calls[0][0].type).toBe(contentType);
+
+            await user.click(screen.getByRole('button', { name: 'Zavřít' }));
+            await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/preview'));
+        } finally {
+            delete URL.createObjectURL;
+            delete URL.revokeObjectURL;
+        }
+    });
+
+    it('lets a terminated client only download', async () => {
+        serveClient(TERMINATED_MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail();
+
+        expect(await screen.findByRole('button', { name: 'Stáhnout dokument smlouva.pdf' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Smazat dokument smlouva.pdf' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Soubor dokumentu')).not.toBeInTheDocument();
     });
 });

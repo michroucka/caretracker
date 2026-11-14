@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,8 +53,9 @@ const ACCOMMODATION = {
 const TERMINATED_MARIE = { ...MARIE, active: false, terminationDate: '2026-10-31', terminationReason: 'EXITUS' };
 
 /** Serves the client from a variable, so a reload after an action shows what the server changed. */
-function serveClient(initialClient, { housingActive = true } = {}) {
+function serveClient(initialClient, { housingActive = true, documents = [] } = {}) {
     let storedClient = initialClient;
+    const documentRequests = serveAndRecord('get', '/clients/:id/documents', () => HttpResponse.json(documents));
     server.use(
         http.get(apiUrl('/clients/:id'), () => HttpResponse.json(storedClient)),
         http.get(apiUrl('/departments'), () => HttpResponse.json([PLZEN])),
@@ -66,7 +67,7 @@ function serveClient(initialClient, { housingActive = true } = {}) {
         ])),
     );
     const listReloads = serveAndRecord('get', '/clients', () => HttpResponse.json([]));
-    return { listReloads, changeTo: (client) => { storedClient = client; } };
+    return { listReloads, documentRequests, changeTo: (client) => { storedClient = client; } };
 }
 
 function renderDetail(authStatus = admin()) {
@@ -439,5 +440,150 @@ describe('ClientDetail – contract', () => {
         expect(activations[0].path).toMatch(/\/clients\/7\/activate$/);
         await waitFor(() => expect(screen.queryByText('Ukončení smlouvy')).not.toBeInTheDocument());
         expect(screen.getByText('Klient úspěšně aktivován')).toBeInTheDocument();
+    });
+});
+
+const CONTRACT_DOCUMENT = {
+    id: 1,
+    type: 'CONTRACT',
+    fileName: 'smlouva.pdf',
+    contentType: 'application/pdf',
+    size: 2048,
+    uploadedAt: '2026-11-01T10:30:00',
+    uploadedByName: 'Jana Testová',
+};
+
+const pdfFile = (name = 'souhlas.pdf', type = 'application/pdf') => new File(['x'], name, { type });
+
+async function chooseDocumentType(user, label) {
+    await user.click(await screen.findByRole('combobox', { name: 'Typ dokumentu' }));
+    await user.click(await screen.findByRole('option', { name: label }));
+}
+
+describe('ClientDetail – documents', () => {
+    it('does not show the documents to a caregiver and does not even ask for them', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(caregiver());
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(screen.queryByText('Dokumenty', { selector: '[data-slot="card-title"]' })).not.toBeInTheDocument();
+        expect(documentRequests).toHaveLength(0);
+    });
+
+    it.each([['coordinator', coordinator()], ['admin', admin()]])('lists the documents for the %s', async (_, authStatus) => {
+        serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(authStatus);
+
+        expect(await screen.findByText('smlouva.pdf')).toBeInTheDocument();
+        expect(screen.getByText(/Smlouva · 1\. 11\. 2026 · Jana Testová/)).toBeInTheDocument();
+    });
+
+    it('says there are no documents yet', async () => {
+        serveClient(MARIE);
+
+        renderDetail();
+
+        expect(await screen.findByText('Klient zatím nemá žádné dokumenty.')).toBeInTheDocument();
+    });
+
+    it('uploads the chosen file with its type and shows the refreshed list', async () => {
+        const { documentRequests } = serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const append = vi.spyOn(FormData.prototype, 'append');
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+        const file = pdfFile();
+
+        await chooseDocumentType(user, 'Souhlas s klíči');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), file);
+
+        expect(await screen.findByText('Dokument nahrán')).toBeInTheDocument();
+        expect(uploads).toHaveLength(1);
+        expect(append).toHaveBeenCalledWith('file', file);
+        expect(append).toHaveBeenCalledWith('type', 'KEY_CONSENT');
+        expect(documentRequests).toHaveLength(2);
+        append.mockRestore();
+    });
+
+    it('cannot pick a file before the type is chosen', async () => {
+        serveClient(MARIE);
+
+        renderDetail();
+
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+        expect(screen.getByLabelText('Soubor dokumentu')).toBeDisabled();
+    });
+
+    it.each([
+        ['a file of another type', pdfFile('text.txt', 'text/plain'), 'Nahrát lze jen PDF, JPEG nebo PNG'],
+        ['a file over 5 MB', Object.defineProperty(pdfFile(), 'size', { value: 5 * 1024 * 1024 + 1 }), 'Soubor je příliš velký. Maximální velikost je 5 MB'],
+    ])('refuses %s without sending it', async (_, file, message) => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        // user.upload would drop the file of another type because of the input's accept attribute
+        fireEvent.change(screen.getByLabelText('Soubor dokumentu'), { target: { files: [file] } });
+
+        expect(await screen.findByText(message)).toBeInTheDocument();
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('shows the server message when the upload fails', async () => {
+        serveClient(MARIE);
+        serveAndRecord('post', '/clients/:id/documents', serverError('Soubor je prázdný', 400));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), pdfFile());
+
+        expect(await screen.findByText('Soubor je prázdný')).toBeInTheDocument();
+    });
+
+    it('deletes a document only after confirmation', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+        const deletes = serveAndRecord('delete', '/clients/:id/documents/:documentId', () => new HttpResponse(null, { status: 204 }));
+        const { user } = renderDetail();
+
+        await user.click(await screen.findByRole('button', { name: 'Smazat dokument smlouva.pdf' }));
+        expect(deletes).toHaveLength(0);
+        const dialog = await screen.findByRole('alertdialog');
+        await user.click(within(dialog).getByRole('button', { name: 'Smazat' }));
+
+        expect(await screen.findByText('Dokument smazán')).toBeInTheDocument();
+        expect(deletes[0].path).toBe('/api/clients/7/documents/1');
+        expect(documentRequests).toHaveLength(2);
+    });
+
+    it('downloads a document through the API', async () => {
+        serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+        const downloads = serveAndRecord('get', '/clients/:id/documents/:documentId', () => new HttpResponse('pdf', { headers: { 'Content-Type': 'application/pdf' } }));
+        URL.createObjectURL = vi.fn(() => 'blob:http://localhost/file');
+        URL.revokeObjectURL = vi.fn();
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const { user } = renderDetail();
+
+        await user.click(await screen.findByRole('button', { name: 'Stáhnout dokument smlouva.pdf' }));
+
+        await waitFor(() => expect(click).toHaveBeenCalled());
+        expect(downloads[0].path).toBe('/api/clients/7/documents/1');
+        click.mockRestore();
+        delete URL.createObjectURL;
+        delete URL.revokeObjectURL;
+    });
+
+    it('lets a terminated client only download', async () => {
+        serveClient(TERMINATED_MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail();
+
+        expect(await screen.findByRole('button', { name: 'Stáhnout dokument smlouva.pdf' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Smazat dokument smlouva.pdf' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Soubor dokumentu')).not.toBeInTheDocument();
     });
 });

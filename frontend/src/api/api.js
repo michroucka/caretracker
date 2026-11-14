@@ -183,11 +183,13 @@ export async function deleteJSON(endpoint) {
  * The file is sent under the "file" field name, matching the backend @RequestParam("file").
  * @param {string} endpoint
  * @param {File} file
+ * @param {Record<string, string>} [fields] extra form fields sent next to the file
  * @returns {Promise<any>}
  */
-export async function uploadFile(endpoint, file) {
+export async function uploadFile(endpoint, file, fields = {}) {
     const formData = new FormData();
     formData.append("file", file);
+    Object.entries(fields).forEach(([name, value]) => formData.append(name, value));
 
     const response = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
@@ -252,4 +254,29 @@ export async function deleteImage(endpoint) {
     }
 
     return response;
+}
+/**
+ * Downloads a file with the session cookie and saves it under `fileName` through a temporary blob link.
+ * @param {string} endpoint
+ * @param {string} fileName
+ */
+export async function downloadFile(endpoint, fileName) {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+        method: "GET",
+        credentials: "include",
+    });
+
+    handleUnauthorized(response);
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const blobUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
 }

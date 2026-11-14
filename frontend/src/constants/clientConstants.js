@@ -39,3 +39,10 @@ export const accessMethodOptions = [
     {name: "Zavolat", key: "PHONE_CALL"},
     {name: "Jiný", key: "OTHER"}
 ];
+
+export const documentTypeOptions = [
+    {name: "Smlouva", key: "CONTRACT"},
+    {name: "Vstupní šetření", key: "INTAKE_ASSESSMENT"},
+    {name: "Souhlas s klíči", key: "KEY_CONSENT"},
+    {name: "Jiný", key: "OTHER"}
+];

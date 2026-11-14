@@ -13,6 +13,7 @@ import { accessMethodOptions, accommodationTypeOptions, benefitsOptions, genderT
 import { formatClientName, formatDate } from "../utils/formatters.js";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { pictureUrl } from "@/lib/pictures";
+import { ClientDocuments } from "@/components/clients/ClientDocuments";
 import { ClientFields } from "@/components/clients/ClientFields";
 import { ClientTerminateDialog } from "@/components/clients/ClientTerminateDialog";
 import { toFormValues, toRequest, validateClient } from "@/components/clients/clientForm";
@@ -64,7 +65,7 @@ function DetailCard({ title, action, children }) {
     );
 }
 
-function ClientView({ client, onShowMap }) {
+function ClientView({ client, onShowMap, canViewDocuments }) {
     const hasLocation = client.latitude != null && client.longitude != null;
     const tasks = client.tasks ?? [];
 
@@ -125,6 +126,12 @@ function ClientView({ client, onShowMap }) {
                         <DetailItem label="Dojezdová vzdálenost">{client.travelDistanceKm != null && <span className="tabular-nums">{client.travelDistanceKm} km</span>}</DetailItem>
                     </dl>
                 </DetailCard>
+
+                {canViewDocuments && (
+                    <DetailCard title="Dokumenty">
+                        <ClientDocuments clientId={client.id} canModify={client.active} />
+                    </DetailCard>
+                )}
 
                 <DetailCard title="Poznámky">
                     {client.notes
@@ -338,7 +345,7 @@ export function ClientDetail() {
                             </div>
                         </form>
                     ) : (
-                        <ClientView client={client} onShowMap={() => setDialog("map")} />
+                        <ClientView client={client} onShowMap={() => setDialog("map")} canViewDocuments={canEdit} />
                     )}
                 </AnimatedPanel>
             </AnimatePresence>

@@ -18,7 +18,7 @@
 
 | Středisko (číslo) | Sídlo | Obce (municipality) | DPS (supported_housing) | Klienti |
 | --- | --- | --- | --- | --- |
-| 01 Kralovicko | Kralovice | Kralovice, Hadačka, Výrov, Kozojedy, Bohy, Kozlany, Mladotice | DPS Kralovice, DPS Kozlany, DPS Bohy | ~110 |
+| 01 Kralovicko | Kralovice | Kralovice, Hadačka, Výrov, Kozojedy, Bohy, Kožlany, Mladotice | DPS Kralovice, DPS Kožlany, DPS Bohy | ~110 |
 | 02 Plasko | Plasy | Plasy, Babina, Žebnice, Lomnička, Horní Hradiště | DPS Plasy | ~80 |
 | 03 Manětínsko | Manětín | Manětín, Brdo, Hrádek, Lipí, Stvolny | – | ~60 |
 | 04 Třemošensko | Třemošná | Třemošná, Ledce, Zruč-Senec, Dolní Bělá | DPS Třemošná | ~90 |

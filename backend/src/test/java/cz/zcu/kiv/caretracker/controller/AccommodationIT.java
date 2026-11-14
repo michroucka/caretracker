@@ -56,7 +56,7 @@ class AccommodationIT extends AbstractIntegrationTest {
     void municipalitiesOfDepartmentAreListedByName() throws Exception {
         createMunicipality(department, "Kralovice");
         createMunicipality(department, "Bohy");
-        createMunicipality(otherDepartment, "Kozlany");
+        createMunicipality(otherDepartment, "Kožlany");
 
         mockMvc.perform(get("/api/departments/{id}/municipalities", department.getId()).with(loggedInAs(coordinator)))
                 .andExpect(status().isOk())
@@ -108,7 +108,7 @@ class AccommodationIT extends AbstractIntegrationTest {
 
     @Test
     void municipalityOfAnotherDepartmentCannotBeDeletedThroughThisOne() throws Exception {
-        long kozlany = createMunicipality(otherDepartment, "Kozlany");
+        long kozlany = createMunicipality(otherDepartment, "Kožlany");
 
         mockMvc.perform(delete("/api/departments/{id}/municipalities/{municipalityId}", department.getId(), kozlany)
                         .with(loggedInAs(admin)))
@@ -142,7 +142,7 @@ class AccommodationIT extends AbstractIntegrationTest {
     @Test
     void supportedHousingsOfDepartmentAreListed() throws Exception {
         createSupportedHousing(department, "DPS Kralovice");
-        createSupportedHousing(otherDepartment, "DPS Kozlany");
+        createSupportedHousing(otherDepartment, "DPS Kožlany");
 
         mockMvc.perform(get("/api/departments/{id}/supported-housings", department.getId()).with(loggedInAs(coordinator)))
                 .andExpect(status().isOk())
@@ -177,7 +177,7 @@ class AccommodationIT extends AbstractIntegrationTest {
 
     @Test
     void supportedHousingMustBelongToClientsDepartment() throws Exception {
-        long otherHousing = createSupportedHousing(otherDepartment, "DPS Kozlany");
+        long otherHousing = createSupportedHousing(otherDepartment, "DPS Kožlany");
         Map<String, Object> request = clientRequest("SUPPORTED_HOUSING");
         request.put("supportedHousingId", otherHousing);
 

@@ -159,11 +159,11 @@ DEPARTMENTS = [
         "id": 1, "number": 1, "name": "Kralovicko", "city": "Kralovice", "street": "Plzeňská 154", "postal": "331 41",
         "clients": 110, "caregivers": 14,
         "municipalities": [("Kralovice", "331 41", True, 40), ("Hadačka", "331 41", False, 5), ("Výrov", "331 41", False, 6),
-                           ("Kozojedy", "331 41", False, 10), ("Bohy", "331 41", False, 8), ("Kozlany", "331 44", True, 22),
+                           ("Kozojedy", "331 41", False, 10), ("Bohy", "331 41", False, 8), ("Kožlany", "331 44", True, 22),
                            ("Mladotice", "331 41", False, 8)],
         "outside": [("Čistá", "270 34", 11), ("Jesenice", "270 33", 14)],
         "housing": [(1, "DPS Kralovice", "Jungmannova 640", "Kralovice", "331 41", 9),
-                    (2, "DPS Kozlany", "Školní 330", "Kozlany", "331 44", 6),
+                    (2, "DPS Kožlany", "Školní 330", "Kožlany", "331 44", 6),
                     (3, "DPS Bohy", "Bohy 45", "Bohy", "331 41", 3)],
     },
     {
@@ -196,7 +196,7 @@ SECOND_DEPARTMENT = {
     "municipalities": [("Rokycany", "337 01", True, 6), ("Kamenný Újezd", "337 01", False, 1), ("Mýto", "338 05", True, 1)],
 }
 
-TOWNS = ("Kralovice", "Kozlany", "Plasy", "Manětín", "Třemošná", "Rokycany", "Mýto")
+TOWNS = ("Kralovice", "Kožlany", "Plasy", "Manětín", "Třemošná", "Rokycany", "Mýto")
 
 STREETS = [
     "Školní", "Nádražní", "Husova", "Plzeňská", "Na Výsluní", "Komenského", "Sokolská", "Zahradní", "Polní",
@@ -356,7 +356,7 @@ ACCESS_NOTES = {
     "OTHER": ["Vchod ze dvora, branka bývá zavřená na háček.", "Klíč pod rohožkou u sousedky, domluveno s rodinou."],
 }
 DOCTORS = [
-    ("MUDr. Jana Horáková", "Kralovice", 1), ("MUDr. Petr Vojta", "Kralovice", 1), ("MUDr. Eva Škodová", "Kozlany", 1),
+    ("MUDr. Jana Horáková", "Kralovice", 1), ("MUDr. Petr Vojta", "Kralovice", 1), ("MUDr. Eva Škodová", "Kožlany", 1),
     ("MUDr. Martin Kubeš", "Plasy", 2), ("MUDr. Lenka Fialová", "Plasy", 2), ("MUDr. Tomáš Rybák", "Manětín", 3),
     ("MUDr. Hana Benešová", "Třemošná", 4), ("MUDr. Karel Petrák", "Třemošná", 4), ("MUDr. Alena Krausová", "Rokycany", 5),
 ]

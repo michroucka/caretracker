@@ -19,11 +19,11 @@ export function pictureUrl(owner, ownerId, pictureId, size = "thumb") {
 }
 
 /**
- * Shrinks a photo in the browser before upload (longest edge 1600 px, JPEG), so a phone photo of any
- * size uploads quickly and fits the server limit. The server resizes again and never trusts this step.
+ * Shrinks a photo in the browser before upload (longest edge 1600 px by default, JPEG), so a phone photo
+ * of any size uploads quickly and fits the server limit. The server never trusts this step.
  * Throws an Error with a user-facing message when the browser cannot read the file (e.g. HEIC in Chrome).
  */
-export async function shrinkPhoto(file) {
+export async function shrinkPhoto(file, { maxEdge = MAX_EDGE } = {}) {
     if (!file.type.startsWith("image/")) throw new Error("Vyberte prosím obrázek (JPG, PNG, GIF nebo WebP).");
     if (file.size > MAX_SOURCE_SIZE_MB * 1024 * 1024) throw new Error(`Soubor je příliš velký. Maximum je ${MAX_SOURCE_SIZE_MB} MB.`);
 
@@ -34,7 +34,7 @@ export async function shrinkPhoto(file) {
         throw new Error("Tento formát fotky prohlížeč neumí otevřít. Uložte ji prosím jako JPG a zkuste to znovu.");
     }
 
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);

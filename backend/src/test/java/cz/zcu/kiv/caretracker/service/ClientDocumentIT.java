@@ -174,6 +174,22 @@ class ClientDocumentIT extends AbstractIntegrationTest {
         assertThat(clientDocumentRepository.existsById(document.getId())).isTrue();
     }
 
+    @Test
+    void documentUpToTenMegabytesIsAcceptedAndBiggerRefused() throws Exception {
+        upload(new MockMultipartFile("file", "sken.pdf", "application/pdf", pdfOfSize(10 * 1024 * 1024)), "CONTRACT")
+                .andExpect(status().isOk());
+
+        upload(new MockMultipartFile("file", "sken.pdf", "application/pdf", pdfOfSize(10 * 1024 * 1024 + 1)), "CONTRACT")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Soubor je příliš velký. Maximální velikost je 10 MB"));
+    }
+
+    private static byte[] pdfOfSize(int size) {
+        byte[] data = new byte[size];
+        System.arraycopy(TestData.PDF, 0, data, 0, TestData.PDF.length);
+        return data;
+    }
+
     private ResultActions upload(MockMultipartFile file, String type) throws Exception {
         return perform(multipart("/api/clients/{id}/documents", client.getId()).file(file).param("type", type));
     }

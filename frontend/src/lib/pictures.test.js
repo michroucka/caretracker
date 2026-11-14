@@ -48,6 +48,15 @@ describe("pictureUrl", () => {
 });
 
 describe("shrinkPhoto", () => {
+    it("keeps a larger edge when asked, e.g. for scanned documents", async () => {
+        mockImaging({ bitmap: fakeBitmap(4800, 3600) });
+
+        await shrinkPhoto(imageFile(), { maxEdge: 2400 });
+
+        const canvas = HTMLCanvasElement.prototype.toBlob.mock.contexts[0];
+        expect([canvas.width, canvas.height]).toEqual([2400, 1800]);
+    });
+
     it("rejects a file that is not an image", async () => {
         await expect(shrinkPhoto(new File(["%PDF"], "doc.pdf", { type: "application/pdf" }))).rejects.toThrow("Vyberte prosím obrázek");
     });

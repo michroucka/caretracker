@@ -7,21 +7,28 @@ import { ConfirmDialog } from "@/components/data/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { shrinkPhoto } from "@/lib/pictures";
 import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
 
 const ALLOWED_CONTENT_TYPES = ["application/pdf", "image/jpeg", "image/png"];
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+// scans of documents stay readable at this size, photos from a phone shrink to a few hundred kB
+const DOCUMENT_PHOTO_EDGE = 2400;
 
 const typeName = (type) => documentTypeOptions.find((option) => option.key === type)?.name ?? type;
 
 const documentDescription = (document) =>
     [typeName(document.type), formatDate(document.uploadedAt), document.uploadedByName].filter(Boolean).join(" · ");
 
-function validateFile(file) {
-    if (!ALLOWED_CONTENT_TYPES.includes(file.type)) return "Nahrát lze jen PDF, JPEG nebo PNG";
-    if (file.size > MAX_FILE_SIZE) return "Soubor je příliš velký. Maximální velikost je 5 MB";
-    return null;
+async function prepareFile(file) {
+    if (!file.type.startsWith("image/")) return file;
+    const shrunk = await shrinkPhoto(file, { maxEdge: DOCUMENT_PHOTO_EDGE });
+    return new File([shrunk], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg" });
 }
+
+const validateType = (file) => (ALLOWED_CONTENT_TYPES.includes(file.type) ? null : "Nahrát lze jen PDF, JPEG nebo PNG");
+
+const validateSize = (file) => (file.size > MAX_FILE_SIZE ? "Soubor je příliš velký. Maximální velikost je 10 MB" : null);
 
 /** Documents of a client. Without `canModify` (terminated client) they can only be downloaded. */
 export function ClientDocuments({ clientId, canModify }) {
@@ -39,12 +46,25 @@ export function ClientDocuments({ clientId, canModify }) {
         const file = event.target.files[0];
         event.target.value = "";
         if (!file) return;
-        const problem = validateFile(file);
-        if (problem) {
-            toast.error(problem);
+        const typeProblem = validateType(file);
+        if (typeProblem) {
+            toast.error(typeProblem);
             return;
         }
-        await uploadDocument(file, type).catch(() => {});
+        let prepared;
+        try {
+            prepared = await prepareFile(file);
+        } catch (err) {
+            toast.error(err.message);
+            return;
+        }
+        const sizeProblem = validateSize(prepared);
+        if (sizeProblem) {
+            toast.error(sizeProblem);
+            return;
+        }
+        // the hook shows the error toast itself
+        await uploadDocument(prepared, type).catch(() => {});
     };
 
     return (

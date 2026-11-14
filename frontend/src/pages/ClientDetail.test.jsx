@@ -7,6 +7,12 @@ import { renderWithProviders } from '@/test/render';
 import { serveAndRecord, serverError } from '@/test/hooks';
 import { apiUrl, server } from '@/test/server';
 import { admin, caregiver, coordinator } from '@/test/users';
+import { shrinkPhoto } from '@/lib/pictures';
+
+vi.mock('@/lib/pictures', async (importOriginal) => {
+    const actual = await importOriginal();
+    return { ...actual, shrinkPhoto: vi.fn(actual.shrinkPhoto) };
+});
 
 const PLZEN = { id: 2, city: 'Plzeň' };
 
@@ -537,7 +543,7 @@ describe('ClientDetail – documents', () => {
 
     it.each([
         ['a file of another type', pdfFile('text.txt', 'text/plain'), 'Nahrát lze jen PDF, JPEG nebo PNG'],
-        ['a file over 5 MB', Object.defineProperty(pdfFile(), 'size', { value: 5 * 1024 * 1024 + 1 }), 'Soubor je příliš velký. Maximální velikost je 5 MB'],
+        ['a PDF over 10 MB', Object.defineProperty(pdfFile(), 'size', { value: 10 * 1024 * 1024 + 1 }), 'Soubor je příliš velký. Maximální velikost je 10 MB'],
     ])('refuses %s without sending it', async (_, file, message) => {
         serveClient(MARIE);
         const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
@@ -549,6 +555,38 @@ describe('ClientDetail – documents', () => {
         fireEvent.change(screen.getByLabelText('Soubor dokumentu'), { target: { files: [file] } });
 
         expect(await screen.findByText(message)).toBeInTheDocument();
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('shrinks a photo before uploading it and keeps its name with a .jpg extension', async () => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        const photo = new File(['pixels'], 'souhlas-klice.png', { type: 'image/png' });
+        Object.defineProperty(photo, 'size', { value: 12 * 1024 * 1024 });
+        shrinkPhoto.mockResolvedValueOnce(new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' }));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Souhlas s klíči');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), photo);
+
+        await waitFor(() => expect(uploads).toHaveLength(1));
+        expect(shrinkPhoto).toHaveBeenCalledWith(photo, { maxEdge: 2400 });
+        // jsdom serializes the multipart body as text, only the file name is visible in it
+        expect(uploads[0].body).toContain('file=souhlas-klice.jpg');
+    });
+
+    it('shows why a photo could not be processed and sends nothing', async () => {
+        serveClient(MARIE);
+        const uploads = serveAndRecord('post', '/clients/:id/documents', () => HttpResponse.json(CONTRACT_DOCUMENT));
+        shrinkPhoto.mockRejectedValueOnce(new Error('Tento formát fotky prohlížeč neumí otevřít. Uložte ji prosím jako JPG a zkuste to znovu.'));
+        const { user } = renderDetail();
+        await screen.findByText('Klient zatím nemá žádné dokumenty.');
+
+        await chooseDocumentType(user, 'Jiný');
+        await user.upload(screen.getByLabelText('Soubor dokumentu'), new File(['pixels'], 'sken.jpg', { type: 'image/jpeg' }));
+
+        expect(await screen.findByText(/Tento formát fotky prohlížeč neumí otevřít/)).toBeInTheDocument();
         expect(uploads).toHaveLength(0);
     });
 

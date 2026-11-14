@@ -26,7 +26,7 @@ import java.util.List;
 @Service
 public class ClientDocumentService extends BaseRoleFilteringService<ClientDocument, ClientDocumentDTO> {
 
-    private static final long MAX_FILE_SIZE = 5L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final int MAX_FILE_NAME_LENGTH = 255;
     private static final byte[] PDF_SIGNATURE = {'%', 'P', 'D', 'F', '-'};
     private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
@@ -63,7 +63,7 @@ public class ClientDocumentService extends BaseRoleFilteringService<ClientDocume
             throw new ValidationException("Soubor je prázdný");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new ValidationException("Soubor je příliš velký. Maximální velikost je 5 MB");
+            throw new ValidationException("Soubor je příliš velký. Maximální velikost je 10 MB");
         }
         byte[] data = file.getBytes();
 

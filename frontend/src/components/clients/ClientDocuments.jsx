@@ -1,11 +1,10 @@
 import React from "react";
-import { IconDownload, IconTrash } from "@tabler/icons-react";
+import { IconDownload, IconTrash, IconUpload } from "@tabler/icons-react";
 import { useClientDocuments } from "@/hooks/useClientDocuments";
 import { documentTypeOptions } from "@/constants/clientConstants";
 import { formatDate } from "@/utils/formatters";
 import { ConfirmDialog } from "@/components/data/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 
@@ -25,6 +24,7 @@ export function ClientDocuments({ clientId, canModify }) {
     const { documents, loading, fetchDocuments, uploadDocument, deleteDocument, downloadDocument } = useClientDocuments(clientId);
     const [type, setType] = React.useState("");
     const [documentToDelete, setDocumentToDelete] = React.useState(null);
+    const fileInputRef = React.useRef(null);
 
     React.useEffect(() => {
         fetchDocuments();
@@ -64,14 +64,15 @@ export function ClientDocuments({ clientId, canModify }) {
                 </ul>
             )}
             {canModify && (
-                <div className="grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Select value={type} onValueChange={setType}>
-                        <SelectTrigger aria-label="Typ dokumentu" className="w-full"><SelectValue placeholder="Typ dokumentu" /></SelectTrigger>
+                        <SelectTrigger aria-label="Typ dokumentu" className="w-48"><SelectValue placeholder="Typ dokumentu" /></SelectTrigger>
                         <SelectContent>
                             {documentTypeOptions.map((option) => <SelectItem key={option.key} value={option.key}>{option.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
-                    <Input type="file" aria-label="Soubor dokumentu" accept={ALLOWED_CONTENT_TYPES.join(",")} disabled={!type} onChange={upload} />
+                    <input ref={fileInputRef} type="file" aria-label="Soubor dokumentu" accept={ALLOWED_CONTENT_TYPES.join(",")} className="sr-only" disabled={!type} onChange={upload} />
+                    <Button type="button" variant="outline" disabled={!type} onClick={() => fileInputRef.current?.click()}><IconUpload /> Nahrát soubor</Button>
                 </div>
             )}
             <ConfirmDialog

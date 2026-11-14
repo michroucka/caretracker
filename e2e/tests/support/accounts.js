@@ -1,6 +1,6 @@
 import path from "node:path";
 
-// Demo accounts from the Flyway seed, all with the same password
+// Demo accounts from the demo seed (DemoDataSeeder), all with the same password
 export const PASSWORD = "heslo";
 export const ACCOUNTS = ["superadmin", "admin", "coordinator", "caregiver", "client"];
 

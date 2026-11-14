@@ -266,7 +266,55 @@ describe('ClientCreate', () => {
             notes: null,
             terminationDate: null,
             terminationReason: null,
+            titleBefore: null,
+            titleAfter: null,
+            phone2: null,
+            guardianName: null,
+            guardianContact: null,
+            careFrom: null,
+            careTo: null,
+            contractFrom: null,
+            contractTo: null,
+            contractIndefinite: true,
+            noCharge: false,
+            intakeAssessmentDate: null,
         });
+    });
+
+    it('asks for the guardian only of a client who is not legally competent', async () => {
+        const creations = serveAndRecord('post', '/clients');
+        const { user } = renderCreateForm();
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+        expect(screen.queryByLabelText(/^Kontakt na opatrovníka/)).not.toBeInTheDocument();
+
+        await user.click(screen.getByLabelText('Svéprávný'));
+        expect(field('Opatrovník')).toBeInTheDocument();
+        await user.click(submitButton());
+
+        expect(screen.getAllByText('U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka')).toHaveLength(2);
+        expect(creations).toHaveLength(0);
+
+        await enterText(user, field('Opatrovník'), 'Jan Nový');
+        await enterText(user, field('Kontakt na opatrovníka'), '603 111 222');
+        await user.click(submitButton());
+
+        await waitFor(() => expect(creations).toHaveLength(1));
+        expect(creations[0].body).toMatchObject({ legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: '603 111 222' });
+    });
+
+    it('asks for the contract end only of a fixed-term contract', async () => {
+        const creations = serveAndRecord('post', '/clients');
+        const { user } = renderCreateForm();
+        await screen.findByRole('button', { name: 'Vytvořit klienta' });
+        await fillRequiredFields(user);
+        expect(screen.queryByLabelText(/^Konec smlouvy/)).not.toBeInTheDocument();
+
+        await user.click(screen.getByLabelText('Smlouva na dobu neurčitou'));
+        await user.click(submitButton());
+
+        expect(screen.getByText('U smlouvy na dobu určitou vyplňte datum konce')).toBeInTheDocument();
+        expect(creations).toHaveLength(0);
     });
 
     it('shows the server message and stays on the form when saving fails', async () => {

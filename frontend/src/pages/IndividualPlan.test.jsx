@@ -69,6 +69,15 @@ describe('IndividualPlan', () => {
         expect(screen.getByText('+420 777 123 456')).toBeInTheDocument();
     });
 
+    it('shows the client name with titles in the heading and the summary', async () => {
+        serveClient({ ...client({ active: true }), firstName: 'Jana', titleBefore: 'Mgr.', titleAfter: 'DiS.' });
+
+        renderPlanAsClientsCaregiver();
+
+        expect(await screen.findByRole('link', { name: 'Mgr. Jana Nová, DiS.' })).toBeInTheDocument();
+        expect(screen.getByText('Mgr. Jana Nová, DiS.', { selector: 'dd' })).toBeInTheDocument();
+    });
+
     it('prints the plan', async () => {
         const user = userEvent.setup();
         const print = vi.spyOn(window, 'print').mockImplementation(() => {});

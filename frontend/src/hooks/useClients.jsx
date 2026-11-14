@@ -4,6 +4,7 @@ import { savePicture } from "@/lib/pictures";
 import { toast } from "@/components/ui/sonner";
 import { showErrorToast } from "../utils/errorHandler.jsx";
 import { sortByKey } from "../utils/sorting.js";
+import { formatClientName } from "../utils/formatters.js";
 
 export function useClients() {
     const [clients, setClients] = useState([]);
@@ -19,7 +20,7 @@ export function useClients() {
     function mapClient(client) {
         return {
             ...client,
-            fullName: `${client.firstName} ${client.lastName}`,
+            fullName: formatClientName(client),
             address: `${client.street}, ${client.city}`,
         };
     }

@@ -94,6 +94,12 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
             <FieldSection title="Osobní údaje">
                 <PhotoInput id={`${idPrefix}-picture`} value={values.picture} onChange={(picture) => onChange("picture", picture)} name={`${values.firstName} ${values.lastName}`} hasSavedPicture={hasSavedPicture} disabled={disabled} />
                 <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <FormField {...field("titleBefore", "Titul před jménem")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={20} disabled={disabled} value={values.titleBefore} onChange={update("titleBefore")} />}
+                    </FormField>
+                    <FormField {...field("titleAfter", "Titul za jménem")}>
+                        {(controlProps) => <Input {...controlProps} autoComplete="off" maxLength={20} disabled={disabled} value={values.titleAfter} onChange={update("titleAfter")} />}
+                    </FormField>
                     <FormField {...field("firstName", "Jméno", { required: true })}>
                         {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.firstName} onChange={update("firstName")} />}
                     </FormField>
@@ -121,6 +127,19 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                     </div>
                 </div>
             </FieldSection>
+
+            {!values.legallyCompetent && (
+                <FieldSection title="Opatrovník">
+                    <div className="grid items-start gap-4 sm:grid-cols-2">
+                        <FormField {...field("guardianName", "Opatrovník", { required: true })}>
+                            {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.guardianName} onChange={update("guardianName")} />}
+                        </FormField>
+                        <FormField {...field("guardianContact", "Kontakt na opatrovníka", { required: true })}>
+                            {(controlProps) => <Input {...controlProps} autoComplete="off" disabled={disabled} value={values.guardianContact} onChange={update("guardianContact")} />}
+                        </FormField>
+                    </div>
+                </FieldSection>
+            )}
 
             <FieldSection title="Péče">
                 <div className="grid items-start gap-4 sm:grid-cols-2">
@@ -166,6 +185,36 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                             />
                         )}
                     </FormField>
+                </div>
+            </FieldSection>
+
+            <FieldSection title="Smlouva">
+                <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <FormField {...field("contractFrom", "Smlouva od")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.contractFrom} onChange={(date) => onChange("contractFrom", date)} />}
+                    </FormField>
+                    <div className="flex items-center gap-3 sm:pt-7">
+                        <Checkbox id={`${idPrefix}-contract-indefinite`} checked={values.contractIndefinite} onCheckedChange={(checked) => onChange("contractIndefinite", checked === true)} disabled={disabled} />
+                        <Label htmlFor={`${idPrefix}-contract-indefinite`}>Smlouva na dobu neurčitou</Label>
+                    </div>
+                    {!values.contractIndefinite && (
+                        <FormField {...field("contractTo", "Konec smlouvy", { required: true })}>
+                            {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.contractTo} onChange={(date) => onChange("contractTo", date)} />}
+                        </FormField>
+                    )}
+                    <FormField {...field("careFrom", "Péče od")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.careFrom} onChange={(date) => onChange("careFrom", date)} />}
+                    </FormField>
+                    <FormField {...field("careTo", "Péče do")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.careTo} onChange={(date) => onChange("careTo", date)} />}
+                    </FormField>
+                    <FormField {...field("intakeAssessmentDate", "Vstupní šetření")}>
+                        {(controlProps) => <DatePicker {...controlProps} disabled={disabled} value={values.intakeAssessmentDate} onChange={(date) => onChange("intakeAssessmentDate", date)} />}
+                    </FormField>
+                    <div className="flex items-center gap-3 sm:pt-7">
+                        <Checkbox id={`${idPrefix}-no-charge`} checked={values.noCharge} onCheckedChange={(checked) => onChange("noCharge", checked === true)} disabled={disabled} />
+                        <Label htmlFor={`${idPrefix}-no-charge`}>Bez úhrady</Label>
+                    </div>
                 </div>
             </FieldSection>
 
@@ -243,6 +292,11 @@ export function ClientFields({ idPrefix, values, errors, onChange, disabled, sha
                     <FormField {...field("phone", "Telefon")}>
                         {(controlProps) => (
                             <Input {...controlProps} type="tel" className="tabular-nums" disabled={disabled} value={values.phone} onChange={(event) => onChange("phone", formatPhoneNumber(event.target.value))} />
+                        )}
+                    </FormField>
+                    <FormField {...field("phone2", "Druhý telefon")}>
+                        {(controlProps) => (
+                            <Input {...controlProps} type="tel" className="tabular-nums" disabled={disabled} value={values.phone2} onChange={(event) => onChange("phone2", formatPhoneNumber(event.target.value))} />
                         )}
                     </FormField>
                     <FormField {...field("email", "E-mail")}>

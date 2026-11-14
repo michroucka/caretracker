@@ -53,6 +53,11 @@ export function formatPhoneNumber(value) {
  * @param {string} value raw input value
  * @returns {string} formatted postal code
  */
+export function formatClientName({ titleBefore, firstName, lastName, titleAfter }) {
+    const name = [titleBefore, firstName, lastName].filter(Boolean).join(' ');
+    return titleAfter ? `${name}, ${titleAfter}` : name;
+}
+
 export function formatPostalCode(value) {
     const cleaned = value.replace(/\D/g, '').slice(0, 5);
     if (cleaned.length <= 3) return cleaned;

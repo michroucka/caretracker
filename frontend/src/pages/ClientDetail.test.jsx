@@ -120,6 +120,55 @@ describe('ClientDetail – view', () => {
         expect(screen.queryByText('Ukončení smlouvy')).not.toBeInTheDocument();
     });
 
+    it('shows the name with titles in the heading', async () => {
+        serveClient({ ...MARIE, firstName: 'Jana', titleBefore: 'Mgr.', titleAfter: 'DiS.' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByRole('heading', { level: 1, name: 'Mgr. Jana Nová, DiS.' })).toBeInTheDocument();
+    });
+
+    it('shows the guardian only of a client who is not legally competent', async () => {
+        serveClient({ ...MARIE, legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: '603 111 222' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Opatrovník', { selector: 'h2, h3, [data-slot="card-title"]' })).toBeInTheDocument();
+        expect(detailValue('Kontakt na opatrovníka')).toHaveTextContent('603 111 222');
+    });
+
+    it('shows an indefinite contract without an end', async () => {
+        serveClient({ ...MARIE, contractFrom: '2026-01-01', contractIndefinite: true, contractTo: null });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Smlouva', { selector: '[data-slot="card-title"]' })).toBeInTheDocument();
+        expect(detailValue('Smlouva od')).toHaveTextContent('1. 1. 2026');
+        expect(detailValue('Doba smlouvy')).toHaveTextContent('Neurčitá');
+    });
+
+    it('shows the end of a fixed-term contract', async () => {
+        serveClient({ ...MARIE, contractFrom: '2026-01-01', contractIndefinite: false, contractTo: '2026-12-31' });
+
+        renderDetail(caregiver());
+
+        expect(await screen.findByText('Doba smlouvy', { selector: 'dt' })).toBeInTheDocument();
+        expect(detailValue('Doba smlouvy')).toHaveTextContent('Určitá, do 31. 12. 2026');
+    });
+
+    it('keeps the stored contract and no-charge flags when saving an unrelated change', async () => {
+        serveClient({ ...MARIE, contractIndefinite: false, contractFrom: '2026-01-01', contractTo: '2026-12-31', noCharge: true });
+        const updates = serveAndRecord('put', '/clients/:id', ({ request }) => request.clone().json().then((body) => HttpResponse.json({ ...MARIE, ...body })));
+        const { user } = renderDetail();
+
+        await startEditing(user);
+        await user.type(screen.getByLabelText(/^Praktický lékař/), 'MUDr. Dvořák');
+        await user.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+        await waitFor(() => expect(updates).toHaveLength(1));
+        expect(updates[0].body).toMatchObject({ contractIndefinite: false, contractFrom: '2026-01-01', contractTo: '2026-12-31', noCharge: true });
+    });
+
     it('shows the accommodation including the lock code', async () => {
         serveClient({ ...MARIE, ...ACCOMMODATION });
 

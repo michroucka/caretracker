@@ -70,3 +70,100 @@ describe('accommodation in the request', () => {
         expect(toRequest({ ...toFormValues(null), travelDistanceKm: '12' }).travelDistanceKm).toBe(12);
     });
 });
+
+describe('validateClient – guardian', () => {
+    it('requires the name and contact of the guardian of a client who is not legally competent', () => {
+        const errors = validateClient(filledClient({ legallyCompetent: false, guardianName: ' ', guardianContact: '' }));
+
+        expect(errors.guardianName).toBe('U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka');
+        expect(errors.guardianContact).toBe('U nesvéprávného klienta vyplňte jméno a kontakt opatrovníka');
+    });
+
+    it('accepts a guardian with both fields filled', () => {
+        const errors = validateClient(filledClient({ legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: '603 111 222' }));
+
+        expect(errors).toEqual({});
+    });
+
+    it('does not ask a legally competent client for a guardian', () => {
+        expect(validateClient(filledClient({ legallyCompetent: true }))).toEqual({});
+    });
+});
+
+describe('validateClient – contract and care dates', () => {
+    it('requires the contract end for a fixed-term contract', () => {
+        const errors = validateClient(filledClient({ contractIndefinite: false, contractTo: '' }));
+
+        expect(errors.contractTo).toBe('U smlouvy na dobu určitou vyplňte datum konce');
+    });
+
+    it('ignores a leftover contract end when the contract is indefinite', () => {
+        const errors = validateClient(filledClient({ contractIndefinite: true, contractFrom: '2026-05-01', contractTo: '2026-01-01' }));
+
+        expect(errors.contractTo).toBeUndefined();
+    });
+
+    it('rejects a contract that ends before it starts', () => {
+        const errors = validateClient(filledClient({ contractIndefinite: false, contractFrom: '2026-05-01', contractTo: '2026-04-30' }));
+
+        expect(errors.contractTo).toBe('Konec smlouvy nesmí být před jejím začátkem');
+    });
+
+    it('accepts a contract that ends the day it starts', () => {
+        const errors = validateClient(filledClient({ contractIndefinite: false, contractFrom: '2026-05-01', contractTo: '2026-05-01' }));
+
+        expect(errors).toEqual({});
+    });
+
+    it('rejects care that ends before it starts', () => {
+        const errors = validateClient(filledClient({ careFrom: '2026-05-01', careTo: '2026-04-30' }));
+
+        expect(errors.careTo).toBe('Konec péče nesmí být před jejím začátkem');
+    });
+
+    it.each([
+        { careFrom: '', careTo: '2026-04-30' },
+        { careFrom: '2026-05-01', careTo: '' },
+    ])('does not compare care dates when one is missing: %j', (dates) => {
+        expect(validateClient(filledClient(dates)).careTo).toBeUndefined();
+    });
+});
+
+describe('validateClient – second phone', () => {
+    it('checks the format like the first phone', () => {
+        expect(validateClient(filledClient({ phone2: '12345' })).phone2).toBe('Telefon ve tvaru 123 456 789 nebo +420 123 456 789');
+        expect(validateClient(filledClient({ phone2: '603 111 222' })).phone2).toBeUndefined();
+    });
+});
+
+describe('additional details in the request', () => {
+    it('always sends every new field, because saving replaces the whole client', () => {
+        const request = toRequest(toFormValues(null));
+
+        expect(request).toMatchObject({
+            titleBefore: null, titleAfter: null, phone2: null,
+            guardianName: null, guardianContact: null,
+            careFrom: null, careTo: null,
+            contractFrom: null, contractTo: null, contractIndefinite: true,
+            noCharge: false, intakeAssessmentDate: null,
+        });
+    });
+
+    it('sends the stored values of an existing client unchanged', () => {
+        const client = {
+            titleBefore: 'Mgr.', titleAfter: 'DiS.', phone2: '603111222',
+            legallyCompetent: false, guardianName: 'Jan Nový', guardianContact: 'jan@example.cz',
+            careFrom: '2026-01-01', careTo: '2026-12-31',
+            contractFrom: '2026-01-01', contractTo: '2026-12-31', contractIndefinite: false,
+            noCharge: true, intakeAssessmentDate: '2025-12-15',
+        };
+
+        expect(toRequest(toFormValues(client))).toMatchObject({ ...client, phone2: '603 111 222' });
+    });
+
+    it('does not send a contract end of an indefinite contract', () => {
+        const values = { ...toFormValues({ contractTo: '2026-12-31' }), contractIndefinite: true };
+
+        expect(toRequest(values).contractTo).toBeNull();
+    });
+});

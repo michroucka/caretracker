@@ -8,7 +8,7 @@ import { useIndividualPlan } from "../hooks/useIndividualPlan.jsx";
 import { useRecordForm } from "../hooks/useRecordForm";
 import { ROLES } from "../constants/roles.js";
 import { benefitsOptions } from "../constants/clientConstants.js";
-import { formatDate, formatPhoneNumber } from "../utils/formatters.js";
+import { formatClientName, formatDate, formatPhoneNumber } from "../utils/formatters.js";
 import { BackToTopButton } from "@/components/BackToTopButton";
 import { DatePicker } from "@/components/DatePicker";
 import { FormField } from "@/components/FormField";
@@ -225,7 +225,7 @@ function IndividualPlan() {
     const canEdit = client.active && (isAdmin || isClientsCoordinator || user.employeeId === client.caregiver?.id);
     const latestVersion = individualPlan?.currentContent?.versionNumber;
     const isViewingOldVersion = selectedVersion != null && latestVersion != null && selectedVersion !== latestVersion;
-    const fullName = `${client.firstName} ${client.lastName}`;
+    const fullName = formatClientName(client);
 
     const showVersion = async (versionNumber) => {
         setSelectedVersion(versionNumber);

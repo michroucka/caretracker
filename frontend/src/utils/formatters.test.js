@@ -8,6 +8,7 @@ import {
     formatDate,
     formatDateTime,
     formatTime,
+    formatClientName,
 } from './formatters.js';
 
 const normalizeSpaces = (text) => text.replace(/\s/g, ' ');
@@ -243,5 +244,17 @@ describe('formatTime', () => {
 
     test('formats a local date-time string', () => {
         expect(formatTime('2024-06-15T23:59:00')).toBe('23:59');
+    });
+});
+
+describe('formatClientName', () => {
+    test('puts the titles around the name', () => {
+        expect(formatClientName({ titleBefore: 'Mgr.', firstName: 'Jana', lastName: 'Nová', titleAfter: 'DiS.' })).toBe('Mgr. Jana Nová, DiS.');
+    });
+
+    test('leaves out the titles that are not filled in', () => {
+        expect(formatClientName({ firstName: 'Marie', lastName: 'Nová' })).toBe('Marie Nová');
+        expect(formatClientName({ titleBefore: 'Ing.', firstName: 'Marie', lastName: 'Nová', titleAfter: null })).toBe('Ing. Marie Nová');
+        expect(formatClientName({ titleBefore: null, firstName: 'Marie', lastName: 'Nová', titleAfter: 'CSc.' })).toBe('Marie Nová, CSc.');
     });
 });

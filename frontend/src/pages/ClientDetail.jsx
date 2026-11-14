@@ -10,7 +10,7 @@ import { useTasks } from "../hooks/useTasks.jsx";
 import { useRecordForm } from "../hooks/useRecordForm";
 import { ROLES } from "../constants/roles.js";
 import { accessMethodOptions, accommodationTypeOptions, benefitsOptions, genderTranslations, terminationReasonOptions } from "../constants/clientConstants.js";
-import { formatDate } from "../utils/formatters.js";
+import { formatClientName, formatDate } from "../utils/formatters.js";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { pictureUrl } from "@/lib/pictures";
 import { ClientFields } from "@/components/clients/ClientFields";
@@ -82,6 +82,15 @@ function ClientView({ client, onShowMap }) {
                     </dl>
                 </DetailCard>
 
+                {!client.legallyCompetent && (
+                    <DetailCard title="Opatrovník">
+                        <dl className="grid gap-4 sm:grid-cols-2">
+                            <DetailItem label="Opatrovník">{client.guardianName}</DetailItem>
+                            <DetailItem label="Kontakt na opatrovníka">{client.guardianContact}</DetailItem>
+                        </dl>
+                    </DetailCard>
+                )}
+
                 <DetailCard
                     title="Adresa a kontakt"
                     action={hasLocation && <Button variant="outline" size="sm" onClick={onShowMap}><IconMapPin /> Na mapě</Button>}
@@ -92,6 +101,9 @@ function ClientView({ client, onShowMap }) {
                         </DetailItem>
                         <DetailItem label="Telefon">
                             {client.phone && <a href={`tel:${client.phone.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">{client.phone}</a>}
+                        </DetailItem>
+                        <DetailItem label="Druhý telefon">
+                            {client.phone2 && <a href={`tel:${client.phone2.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">{client.phone2}</a>}
                         </DetailItem>
                         <DetailItem label="E-mail">
                             {client.email && <a href={`mailto:${client.email}`} className="break-all underline-offset-4 hover:underline">{client.email}</a>}
@@ -128,6 +140,19 @@ function ClientView({ client, onShowMap }) {
                         <DetailItem label="Klíčový pracovník">{client.caregiver?.fullName}</DetailItem>
                         <DetailItem label="Příspěvek na péči">{optionName(benefitsOptions, client.benefits)}</DetailItem>
                         <DetailItem label="Klientem od">{client.created && <span className="tabular-nums">{formatDate(client.created)}</span>}</DetailItem>
+                    </dl>
+                </DetailCard>
+
+                <DetailCard title="Smlouva">
+                    <dl className="grid gap-4">
+                        <DetailItem label="Smlouva od">{client.contractFrom && <span className="tabular-nums">{formatDate(client.contractFrom)}</span>}</DetailItem>
+                        <DetailItem label="Doba smlouvy">
+                            {client.contractIndefinite ? "Neurčitá" : <span className="tabular-nums">Určitá, do {formatDate(client.contractTo)}</span>}
+                        </DetailItem>
+                        <DetailItem label="Péče od">{client.careFrom && <span className="tabular-nums">{formatDate(client.careFrom)}</span>}</DetailItem>
+                        <DetailItem label="Péče do">{client.careTo && <span className="tabular-nums">{formatDate(client.careTo)}</span>}</DetailItem>
+                        <DetailItem label="Vstupní šetření">{client.intakeAssessmentDate && <span className="tabular-nums">{formatDate(client.intakeAssessmentDate)}</span>}</DetailItem>
+                        <DetailItem label="Bez úhrady">{client.noCharge ? "Ano" : "Ne"}</DetailItem>
                     </dl>
                 </DetailCard>
 
@@ -241,7 +266,7 @@ export function ClientDetail() {
         );
     }
 
-    const fullName = `${client.firstName} ${client.lastName}`;
+    const fullName = formatClientName(client);
     const address = `${client.street}, ${client.postalCode} ${client.city}`;
 
     return (

@@ -471,6 +471,16 @@ describe('ClientDetail – documents', () => {
         expect(documentRequests).toHaveLength(0);
     });
 
+    it('does not show the documents to a coordinator of another department and does not ask for them', async () => {
+        const { documentRequests } = serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
+
+        renderDetail(coordinator({ departmentId: PLZEN.id + 1 }));
+
+        await screen.findByRole('heading', { level: 1, name: 'Marie Nová' });
+        expect(screen.queryByText('Dokumenty', { selector: '[data-slot="card-title"]' })).not.toBeInTheDocument();
+        expect(documentRequests).toHaveLength(0);
+    });
+
     it.each([['coordinator', coordinator()], ['admin', admin()]])('lists the documents for the %s', async (_, authStatus) => {
         serveClient(MARIE, { documents: [CONTRACT_DOCUMENT] });
 

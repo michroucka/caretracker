@@ -273,6 +273,8 @@ export function ClientDetail() {
         );
     }
 
+    const canViewDocuments = [ROLES.SUPERADMIN, ROLES.ADMIN].includes(user.role)
+        || (user.role === ROLES.COORDINATOR && user.departmentId === client.department?.id);
     const fullName = formatClientName(client);
     const address = `${client.street}, ${client.postalCode} ${client.city}`;
 
@@ -345,7 +347,7 @@ export function ClientDetail() {
                             </div>
                         </form>
                     ) : (
-                        <ClientView client={client} onShowMap={() => setDialog("map")} canViewDocuments={canEdit} />
+                        <ClientView client={client} onShowMap={() => setDialog("map")} canViewDocuments={canViewDocuments} />
                     )}
                 </AnimatedPanel>
             </AnimatePresence>

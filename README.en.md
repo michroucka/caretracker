@@ -15,7 +15,7 @@
     <a href="https://github.com/michroucka/caretracker/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/michroucka/caretracker/ci.yml?branch=main&label=CI&style=flat-square" /></a>
     <a href="https://github.com/michroucka/caretracker/actions/workflows/deploy-demo.yml"><img alt="Demo deployment" src="https://img.shields.io/github/actions/workflow/status/michroucka/caretracker/deploy-demo.yml?branch=main&label=deploy%20demo&style=flat-square" /></a>
     <img alt="Java 21" src="https://img.shields.io/badge/Java-21-4A2B5E?style=flat-square&logo=openjdk&logoColor=white" />
-    <img alt="Spring Boot 3.5" src="https://img.shields.io/badge/Spring_Boot-3.5-4A2B5E?style=flat-square&logo=springboot&logoColor=white" />
+    <img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring_Boot-4.1-4A2B5E?style=flat-square&logo=springboot&logoColor=white" />
     <img alt="React 19" src="https://img.shields.io/badge/React-19-4A2B5E?style=flat-square&logo=react&logoColor=white" />
     <img alt="Vite 7" src="https://img.shields.io/badge/Vite-7-4A2B5E?style=flat-square&logo=vite&logoColor=white" />
     <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-4A2B5E?style=flat-square&logo=tailwindcss&logoColor=white" />
@@ -143,7 +143,7 @@ See the [`Makefile`](Makefile) for all commands.
   <tr>
     <th align="left">Backend</th>
     <td>
-      <a href="https://spring.io/projects/spring-boot">Spring Boot 3</a> (Java 21),
+      <a href="https://spring.io/projects/spring-boot">Spring Boot 4.1</a> (Java 21),
       <a href="https://spring.io/projects/spring-security">Spring Security</a> (sessions),
       <a href="https://spring.io/projects/spring-data-jpa">Spring Data JPA</a>,
       <a href="https://github.com/flyingsaucerproject/flyingsaucer">Flying Saucer</a> (PDF),
@@ -191,7 +191,7 @@ docs/branding/   visual identity – logo, colors, typography, redesign plan
 - [Bachelor's thesis](doc/bachelors_thesis.pdf) (Czech) – analysis, design and user documentation
 - [Software specification](doc/software_specification.pdf)
 - [ER diagram](doc/ERA_Model.pdf) · [Use-case diagram](doc/UC_Diagram.png)
-- [Visual identity](docs/branding/brand-board.html) and [redesign plan](docs/branding/PLAN.md) (Czech)
+- [Visual identity](docs/branding/brand-board.html) and [design system](docs/branding/DESIGN.md) (Czech)
 
 ## License
 

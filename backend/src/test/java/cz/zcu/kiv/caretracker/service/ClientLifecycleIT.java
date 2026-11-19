@@ -152,7 +152,7 @@ class ClientLifecycleIT extends AbstractIntegrationTest {
         assertThat(account.getUsername()).isNull();
         assertThat(account.getPassword()).isNull();
         assertThat(account.getActivationToken()).isNotBlank();
-        assertThat(account.getTokenExpiry()).isAfter(LocalDateTime.now());
+        assertThat(account.getTokenExpiry()).isAfter(NOW);
         verify(mailSender).send(any(MimeMessage.class));
     }
 

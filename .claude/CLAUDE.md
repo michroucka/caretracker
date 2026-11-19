@@ -51,7 +51,7 @@ The backend uses Spring Boot DevTools. The recommended cycle for backend changes
 
 ### Tests
 
-Plan and conventions: `docs/testing/PLAN.md`.
+Decisions and conventions: `docs/testing/CONVENTIONS.md`.
 
 ```bash
 cd backend && ./mvnw test     # unit tests (*Test)
@@ -62,10 +62,17 @@ make e2e-up && make e2e      # Playwright E2E against the demo build on :3040 (f
 ```
 
 - Backend integration tests extend `support/AbstractIntegrationTest` (shared Spring context, DB emptied before each test, `loggedInAs(...)`, data via `TestData`). Don't add `@MockitoBean` in subclasses, it creates a new context.
-- Authorization tests use `support/AccessScenario` (two organizations, one user per `Actor` named by relation to a client) and run each endpoint for every actor: allowed set → 2xx, others → 403. Known security gaps are skipped with `assumeFalse(...)` / `@Disabled` and listed in the plan.
+- Authorization tests use `support/AccessScenario` (two organizations, one user per `Actor` named by relation to a client) and run each endpoint for every actor: allowed set → 2xx, others → 403. A known security gap gets skipped with `assumeFalse(...)` / `@Disabled` and a comment why.
 - Frontend: `renderWithProviders` from `src/test/render.jsx`, API mocked with MSW (`src/test/server.js`), sample users in `src/test/users.js`. Unhandled requests fail the test.
 - E2E (`e2e/`): import `test` and `expect` from `./support/test.js` (fails a test on any Content Security Policy violation), not from `@playwright/test`. Tests start signed in via `test.use({ storageState: storageStateOf("<demo account>") })`, data comes from the demo seed, tests that create records clean up after themselves. Don't log out with a shared storage state, log in inside the test instead.
 - CI (`.github/workflows/ci.yml`) runs on every PR; demo deploy runs only after CI passes on `main`.
+
+Gotchas:
+
+- The map can't be tested in E2E: the demo seed has no client coordinates and geocoding runs with a fake key. Manually: `update client set latitude=49.7475, longitude=13.3776 where id=24` in the E2E database.
+- On the live demo Cloudflare injects an inline JavaScript Detections script that `script-src 'self'` blocks. It doesn't break the app; if it gets in the way, turn it off in the Cloudflare dashboard (Security -> Bots), don't allow it in the CSP.
+- The dev backend container writes to `backend/target` as root, so Maven on the host fails afterwards: `sudo chown -R $USER backend/target`, or run tests in a separate `git worktree`.
+- HSTS is `max-age=31536000` with `includeSubDomains`: a browser that visited the demo refuses plain HTTP to `demo.caretracker.cz` and its subdomains for a year.
 
 ### Verification
 
@@ -79,8 +86,8 @@ make e2e-up && make e2e      # Playwright E2E against the demo build on :3040 (f
 
 ### Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite, TailwindCSS v4, HeroUI (component library), React Router 7, Lucide icons
-- **Backend**: Spring Boot 3 (Java 21), Spring Security (session-based), Spring Data JPA, Flyway migrations
+- **Frontend**: React 19, JavaScript (JSX; TypeScript only in `app/` and `contexts/`), Vite, TailwindCSS v4, shadcn/ui (Radix, components in `components/ui/`), sonner toasts, React Router 7, Tabler icons
+- **Backend**: Spring Boot 4.1 (Java 21), Spring Security (session-based), Spring Data JPA, Flyway migrations
 - **Database**: PostgreSQL 15
 - **PDF generation**: Flying Saucer
 - **Email**: Spring Mail + Thymeleaf templates
@@ -91,18 +98,20 @@ make e2e-up && make e2e      # Playwright E2E against the demo build on :3040 (f
 api/          # Fetch wrappers (getJSON, postJSON, putJSON, deleteJSON)
 app/          # Root layout, router config
 pages/        # One file per route/page
-components/   # Reusable UI components
+components/   # Reusable UI components, shadcn/ui primitives in components/ui/
 hooks/        # Custom data-fetching and filter hooks
 contexts/     # AuthContext (global user state), ThemeContext (dark/light)
-utils/        # Pure utility functions (formatters, filterUtils)
-constants/    # Role enums and other constants
+lib/          # Pure helpers (dates, pagination, pictures, cn in utils.js)
+utils/        # Formatters, sorting, error toasts
+constants/    # Roles (ROLES, hasRole) and other constants
+styles/       # Global CSS and design tokens (index.css)
 ```
 
 Key hooks:
 
-- `useFilterMetadata.jsx` — loads organizations/departments/employees once, provides cascading filter options
-- `useRoleBasedFilters.jsx` — computes permission flags and validates filters by role
-- `filterUtils.js` — pure functions for converting filter state to API params
+- `useListFilters.js` - search text, active/inactive status and page of a list page, kept in the URL
+- `usePagedList.js` - client-side pagination of a filtered list, page kept in the URL
+- `useSearchParamsUpdater.js` - updates some URL search params and keeps the rest
 
 ### Backend Structure (`backend/src/main/java/cz/zcu/kiv/caretracker/`)
 
@@ -116,6 +125,7 @@ mapper/          # Entity ↔ DTO mapping
 specification/   # JPA Criteria API specifications (dynamic filtering)
 security/        # MyUserDetails, auth handlers
 config/          # SecurityConfig, WebConfig
+enums/           # Domain enums (roles, unit types, ...)
 exception/       # Custom exception classes
 ```
 
@@ -135,7 +145,7 @@ SUPERADMIN > ADMIN > COORDINATOR > CAREGIVER
 CLIENT (separate, read-only access to own data)
 ```
 
-Role-based filtering is enforced both in backend `@PreAuthorize` annotations and in frontend `ProtectedRoute` + `useRoleBasedFilters`.
+Role-based filtering is enforced both in backend `@PreAuthorize` annotations and in frontend `ProtectedRoute` + `hasRole` (`constants/roles.js`).
 
 ### API Conventions
 

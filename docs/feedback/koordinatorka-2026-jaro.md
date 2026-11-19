@@ -84,7 +84,7 @@ Vše jde do jednoho PR (kromě přepracování IP, bod 4.3).
 - **2 Osobní číslo:** `XXYYYY` (číslo střediska 01–99 + pořadové číslo 4 číslice), uložené jako text. Číslo střediska povinné, 1–99, unikátní v organizaci. Čísla se nepoužívají znovu (ani po ukončených klientech). Předvyplněné ve formuláři po výběru střediska, upravitelné, unikátnost hlídá backend i unikátní index. Při přesunu klienta do jiného střediska se nemění. Stávající klienti se migrací přečíslují.
 - **3 Klient:** titul před/za, telefon 2, opatrovník (jméno a kontakt, povinné u nesvéprávného), přístup do bytu (způsob, kód zámku, poznámka), výtah, patro/pokoj, smlouva (péče od/do, smlouva od/do, na dobu (ne)určitou), služba bez úhrad, vstupní šetření (datum), dokumenty klienta (PDF/sken s typem: smlouva, šetření, souhlas s klíči, jiné). Kód zámku nedávat do seznamů, exportů ani tisků.
 - **3.6:** vyřešeno předvyplněním osobního čísla (bod 2).
-- **3.7:** koordinátor smí upravovat IP všech klientů svého střediska (backend, frontend, testy, upravit `docs/testing/PLAN.md:108`).
+- **3.7:** koordinátor smí upravovat IP všech klientů svého střediska (backend, frontend, testy).
 - **4.1 Tisk IP:** teď tiskové styly A4 a tlačítko Tisk. PDF až po přepracování IP.
 - **4.2:** telefon v hlavičce IP.
 - **5:** viz rozhodnutí u bodu 5.

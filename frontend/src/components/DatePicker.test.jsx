@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DatePicker } from './DatePicker';
 
 const calendarDay = (date) => screen.getByRole('button', { name: new RegExp(`^${date}`) });
@@ -13,6 +13,15 @@ function renderDatePicker(props) {
 }
 
 describe('DatePicker', () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-01T10:00:00'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('shows the placeholder without a value and the Czech date with one', () => {
         const { unmount } = render(<DatePicker aria-label="Datum" onChange={() => {}} placeholder="Zvolte den" />);
         expect(screen.getByRole('button', { name: 'Datum' })).toHaveTextContent('Zvolte den');
